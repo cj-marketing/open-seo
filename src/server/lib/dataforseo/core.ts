@@ -110,6 +110,44 @@ function asDataforseoTimeoutError(error: unknown, url: RequestInfo): unknown {
 }
 
 /**
+ * Decodes a body that still arrives gzip-compressed. Cloudflare Workers decode
+ * gzip for us, but celld (the Docker edition) does not when the caller sets
+ * Accept-Encoding itself, so JSON.parse saw the raw bytes ("\x1f\x8b\x08...").
+ * The body is sniffed for the gzip magic bytes instead of trusting
+ * Content-Encoding, which a decoding runtime may leave in place. Streams, so
+ * Lighthouse's multi-MB bodies are never buffered here.
+ */
+async function decodeGzipBody(response: Response): Promise<Response> {
+  if (!response.body) return response;
+  const reader = response.body.getReader();
+  const first = await reader.read();
+  if (first.done) return new Response(null, response);
+  const replay = new ReadableStream<BufferSource>({
+    start(controller) {
+      controller.enqueue(first.value);
+    },
+    async pull(controller) {
+      const next = await reader.read();
+      if (next.done) controller.close();
+      else controller.enqueue(next.value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+  const isGzip = first.value[0] === 0x1f && first.value[1] === 0x8b;
+  if (!isGzip) return new Response(replay, response);
+  const headers = new Headers(response.headers);
+  headers.delete("Content-Encoding");
+  headers.delete("Content-Length");
+  return new Response(replay.pipeThrough(new DecompressionStream("gzip")), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+/**
  * The single authenticated `fetch` used by every DataForSEO call. Throws on
  * non-2xx; task-level failures (which return HTTP 200) are handled downstream
  * by {@link assertOk}. An optional classifier maps recognised HTTP failures to
@@ -127,15 +165,17 @@ function createAuthenticatedFetch(
       init?.signal ?? AbortSignal.timeout(DATAFORSEO_REQUEST_TIMEOUT_MS);
     // Ask for gzip explicitly: standalone workerd (the Docker edition) sends
     // no Accept-Encoding, so DataForSEO answers uncompressed (~9.9 MB vs
-    // ~0.6 MB for the US location list) and slow links hit the timeout. The
-    // runtime decodes the gzip body itself.
+    // ~0.6 MB for the US location list) and slow links hit the timeout.
+    // decodeGzipBody covers runtimes that hand the body back still compressed.
     const headers = new Headers(init?.headers);
     if (!headers.has("Accept-Encoding")) headers.set("Accept-Encoding", "gzip");
 
     for (let attempt = 0; ; attempt++) {
       let response: Response;
       try {
-        response = await providerFetch(url, { ...init, headers, signal });
+        response = await decodeGzipBody(
+          await providerFetch(url, { ...init, headers, signal }),
+        );
       } catch (error) {
         // Both abort flavours mean "we ran out of time", and neither carries a
         // useful name of its own: the shared budget above rejects with

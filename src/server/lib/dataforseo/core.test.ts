@@ -71,6 +71,25 @@ describe("DataForSEO transport", () => {
     },
   );
 
+  // The Docker edition's runtime hands the body back still gzip-compressed
+  // after we set Accept-Encoding, and every call failed in JSON.parse.
+  it("decodes a body that arrives still gzip-compressed", async () => {
+    const envelope = { status_code: 20000, tasks: [] };
+    const gzipped = new Response(JSON.stringify(envelope)).body!.pipeThrough(
+      new CompressionStream("gzip"),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(gzipped, { headers: { "Content-Encoding": "gzip" } }),
+      ),
+    );
+
+    await expect(
+      dataforseoPost("/v3/backlinks/summary/live", []),
+    ).resolves.toEqual(envelope);
+  });
+
   // Seen in production: headers arrive in time, then the deadline aborts
   // while the body is still streaming in.
   it("maps a timeout while reading the body to UPSTREAM_UNAVAILABLE", async () => {
