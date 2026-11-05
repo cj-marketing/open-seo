@@ -76,6 +76,30 @@ describe("BingWebmasterService", () => {
     });
   });
 
+  // Seen live: Bing sends AvgClickPosition -1 for rows that have clicks but no
+  // click position, which averaged into a position of -1.
+  it("treats Bing's -1 position as missing", async () => {
+    mockBing([site("https://example.com/")], {
+      GetQueryStats: [
+        {
+          ...statsRow("brand", "/Date(1316156400000)/", 50, 5, 3),
+          AvgClickPosition: -1,
+        },
+      ],
+    });
+
+    const result = await BingWebmasterService.getSearchPerformance(
+      "example.com",
+      { dimension: "query", limit: 10 },
+    );
+
+    expect(result).toMatchObject({
+      rows: [
+        { key: "brand", avgImpressionPosition: 3, avgClickPosition: null },
+      ],
+    });
+  });
+
   it("matches the project domain to a verified site ignoring www, protocol and slash", async () => {
     mockBing(
       [
