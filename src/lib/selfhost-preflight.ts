@@ -14,7 +14,7 @@ type PreflightLevel = "ok" | "info" | "warn" | "fail";
 
 type PreflightItem = {
   // Stable identifier shared with /api/health's check map.
-  key: "auth" | "dataforseo" | "gsc" | "ai" | "rendering" | "runtime";
+  key: "auth" | "dataforseo" | "gsc" | "bing" | "ai" | "rendering" | "runtime";
   name: string;
   level: PreflightLevel;
   message: string;
@@ -258,6 +258,23 @@ function checkOptionalFeatures(env: EnvRecord, items: PreflightItem[]): void {
         "Not configured (optional). See docs/SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md.",
     });
   }
+
+  items.push(
+    get(env, "BING_WEBMASTER_API_KEY")
+      ? {
+          key: "bing",
+          name: "Bing Webmaster Tools",
+          level: "ok",
+          message: "BING_WEBMASTER_API_KEY set",
+        }
+      : {
+          key: "bing",
+          name: "Bing Webmaster Tools",
+          level: "info",
+          message:
+            "Not configured (optional). Bing Webmaster Tools data via MCP.",
+        },
+  );
 
   items.push(
     get(env, "AUTH_MODE") === "everyapp"
