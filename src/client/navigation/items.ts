@@ -2,6 +2,7 @@ import {
   Bookmark,
   Bot,
   Brain,
+  ChartColumn,
   ChartLine,
   ClipboardCheck,
   FileText,
@@ -49,6 +50,11 @@ const projectNavItems = [
     to: "/p/$projectId/search-performance" as const,
     label: "GSC Insights",
     icon: GoogleGlyphMuted,
+  },
+  {
+    to: "/p/$projectId/bing" as const,
+    label: "Bing Insights",
+    icon: ChartColumn,
   },
   {
     to: "/p/$projectId/domain" as const,
@@ -150,6 +156,7 @@ export function getProjectNavGroups(projectId: string) {
       label: "My Site",
       items: [
         byPath("/p/$projectId/search-performance"),
+        byPath("/p/$projectId/bing"),
         byPath("/p/$projectId/rank-tracking"),
         byPath("/p/$projectId/local-seo"),
         byPath("/p/$projectId/saved"),
