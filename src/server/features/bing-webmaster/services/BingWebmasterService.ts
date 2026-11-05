@@ -123,13 +123,18 @@ function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
 }
 
-/** Weighted mean; rows with weight 0 do not count. Null when no weight at all. */
+/**
+ * Weighted mean of positions; rows with weight 0 do not count, and neither do
+ * rows without a position (Bing reports AvgClickPosition -1 when it has none).
+ * Null when nothing is left.
+ */
 function weightedMean(
   rows: { value: number; weight: number }[],
 ): number | null {
-  const weight = sum(rows.map((row) => row.weight));
+  const valid = rows.filter((row) => row.value > 0);
+  const weight = sum(valid.map((row) => row.weight));
   if (weight === 0) return null;
-  return sum(rows.map((row) => row.value * row.weight)) / weight;
+  return sum(valid.map((row) => row.value * row.weight)) / weight;
 }
 
 function decodeCrawlIssues(flags: number): string[] {
