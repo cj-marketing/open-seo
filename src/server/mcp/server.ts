@@ -108,6 +108,11 @@ import {
 import { researchKeywordsTool } from "@/server/mcp/tools/research-keywords";
 import { saveKeywordsTool } from "@/server/mcp/tools/save-keywords";
 import {
+  getBingCrawlHealthTool,
+  getBingSearchPerformanceTool,
+  getBingTrafficTrendTool,
+} from "@/server/mcp/tools/bing-webmaster-tools";
+import {
   getSearchConsolePerformanceTool,
   inspectUrlsTool,
 } from "@/server/mcp/tools/search-console-tools";
@@ -311,6 +316,9 @@ export function registerOpenSeoTools(
   register(setSearchConsoleSiteTool);
   register(getSearchConsolePerformanceTool);
   register(inspectUrlsTool);
+  register(getBingSearchPerformanceTool);
+  register(getBingTrafficTrendTool);
+  register(getBingCrawlHealthTool);
   register(submitIndexNowUrlsTool);
   register(listGoogleAnalyticsPropertiesTool);
   register(setGoogleAnalyticsPropertyTool);

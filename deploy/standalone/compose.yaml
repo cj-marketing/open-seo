@@ -68,6 +68,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      BING_WEBMASTER_API_KEY: ${BING_WEBMASTER_API_KEY:-}
       CRAWLER_ACCESS_SECRET: ${CRAWLER_ACCESS_SECRET:-}
     volumes: [config:/config, web-config:/web-config]
     depends_on:
