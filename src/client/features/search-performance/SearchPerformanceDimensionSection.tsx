@@ -1,16 +1,18 @@
+import type { ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { QueryError } from "@/client/components/QueryState";
 import { TablePagination } from "@/client/components/table/TablePagination";
 import { SkeletonTableRows } from "@/client/components/SkeletonPresets";
-import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
+import type { DimensionTableResult } from "@/client/features/search-performance/SearchPerformanceColumns";
 import { DimensionTable } from "@/client/features/search-performance/SearchPerformanceParts";
-import type { getSearchPerformanceTable } from "@/serverFunctions/searchPerformance";
 import { SEARCH_PERFORMANCE_PAGE_SIZES } from "@/types/schemas/search-performance";
 
-/** The Queries or Pages tab body: loading, error with retry, reconnect, or the paged table. */
+/** The Queries or Pages tab body: loading, error with retry, the unavailable card, or the paged table. */
 export function DimensionSection({
-  projectId,
   tableQuery,
+  unavailable,
+  errorFallback,
+  emptyState,
   keyLabel,
   showPosition,
   page,
@@ -20,10 +22,11 @@ export function DimensionSection({
   isFiltered,
   onClearFilters,
 }: {
-  projectId: string;
-  tableQuery: UseQueryResult<
-    Awaited<ReturnType<typeof getSearchPerformanceTable>>
-  >;
+  tableQuery: UseQueryResult<DimensionTableResult>;
+  /** Shown when the source went away after the report loaded (for example a dead Google grant). */
+  unavailable: ReactNode;
+  errorFallback: string;
+  emptyState: { title: string; description: string };
   keyLabel: string;
   showPosition: boolean;
   page: number;
@@ -41,7 +44,7 @@ export function DimensionSection({
     <div className="px-4 pt-4">
       <QueryError
         error={tableQuery.error}
-        fallback="Failed to load Search Console data"
+        fallback={errorFallback}
         onRetry={() => void tableQuery.refetch()}
         isRetrying={tableQuery.isFetching}
       />
@@ -51,13 +54,8 @@ export function DimensionSection({
   const tableData = tableQuery.data;
   if (!tableData) return <div className="pb-4">{error}</div>;
 
-  // The grant died after the report loaded as connected.
   if (!tableData.connected) {
-    return (
-      <div className="max-w-2xl p-4">
-        <GoogleConnectionCard provider="gsc" projectId={projectId} />
-      </div>
-    );
+    return <div className="max-w-2xl p-4">{unavailable}</div>;
   }
 
   const isPastEnd =
@@ -71,6 +69,7 @@ export function DimensionSection({
           rows={tableData.rows}
           keyLabel={keyLabel}
           showPosition={showPosition}
+          emptyState={emptyState}
           isFiltered={isFiltered}
           isPastEnd={isPastEnd}
           onClearFilters={onClearFilters}

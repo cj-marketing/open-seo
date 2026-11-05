@@ -18,7 +18,23 @@ export type SearchPerformanceTableRow = Extract<
   { connected: true }
 >["rows"][number];
 type DimensionRow = SearchPerformanceTableRow;
-type StrikingRow = Report["strikingDistance"][number];
+/** One striking-distance row. Bing reports no page per query, so `page` is optional. */
+export type StrikingRow = {
+  query: string;
+  page?: string;
+  impressions: number;
+  clicks: number;
+  position: number;
+};
+/** The result the Queries/Pages tab body renders; Search Console and Bing both produce it. */
+export type DimensionTableResult =
+  | { connected: false }
+  | {
+      connected: true;
+      rows: SearchPerformanceTableRow[];
+      totalCount: number | null;
+      hasNextPage: boolean;
+    };
 
 const numberFormat = new Intl.NumberFormat("en-US");
 
@@ -94,7 +110,29 @@ const strikingHelper = createColumnHelper<StrikingRow>();
 
 export function buildStrikingColumns(
   anchorRef: MutableRefObject<SelectionAnchor | null>,
+  showPage: boolean,
 ): ColumnDef<StrikingRow>[] {
+  const pageColumn = strikingHelper.accessor("page", {
+    enableSorting: false,
+    header: () => "Page",
+    // GSC page keys are canonical http(s) URLs of the verified property;
+    // the scheme check is defense-in-depth before rendering an href.
+    cell: ({ getValue }) => {
+      const page = getValue();
+      if (!page) return null;
+      return (
+        <a
+          href={safeHttpUrl(page) ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          className="block max-w-sm truncate text-primary underline-offset-4 hover:underline"
+          title={page}
+        >
+          {page}
+        </a>
+      );
+    },
+  });
   return [
     makeSelectionColumn<StrikingRow>(anchorRef),
     strikingHelper.accessor("query", {
@@ -106,23 +144,7 @@ export function buildStrikingColumns(
         </span>
       ),
     }),
-    strikingHelper.accessor("page", {
-      enableSorting: false,
-      header: () => "Page",
-      // GSC page keys are canonical http(s) URLs of the verified property;
-      // the scheme check is defense-in-depth before rendering an href.
-      cell: ({ getValue }) => (
-        <a
-          href={safeHttpUrl(getValue()) ?? undefined}
-          target="_blank"
-          rel="noreferrer"
-          className="block max-w-sm truncate text-primary underline-offset-4 hover:underline"
-          title={getValue()}
-        >
-          {getValue()}
-        </a>
-      ),
-    }),
+    ...(showPage ? [pageColumn] : []),
     strikingHelper.accessor("impressions", {
       header: ({ column }) => (
         <SortableHeader column={column} label="Impressions" align="right" />

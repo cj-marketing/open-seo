@@ -21,6 +21,8 @@ function mockBing(sites: unknown[], methods: Record<string, unknown> = {}) {
 
 const site = (Url: string, IsVerified = true) => ({ Url, IsVerified });
 
+const bingDate = (isoDate: string) => `/Date(${Date.parse(isoDate)})/`;
+
 const statsRow = (
   Query: string,
   Date: string,
@@ -73,6 +75,64 @@ describe("BingWebmasterService", () => {
           weeks: 3,
         },
       ],
+    });
+  });
+
+  it("only counts weekly rows whose date is inside the window and matches the filter", async () => {
+    mockBing([site("https://example.com/")], {
+      GetQueryStats: [
+        statsRow("shoes", bingDate("2026-10-01"), 100, 10, 2),
+        statsRow("shoes", bingDate("2026-10-27"), 50, 5, 4),
+        statsRow("boots", bingDate("2026-10-27"), 70, 7, 6),
+      ],
+    });
+
+    const result = await BingWebmasterService.getSearchPerformance(
+      "example.com",
+      {
+        dimension: "query",
+        limit: 10,
+        window: { startDate: "2026-10-20", endDate: "2026-11-02" },
+        filter: { operator: "contains", expression: "SHO" },
+      },
+    );
+
+    expect(result).toMatchObject({
+      matchingRowCount: 1,
+      rows: [{ key: "shoes", impressions: 50, clicks: 5, weeks: 1 }],
+    });
+  });
+
+  it("builds window totals, a weighted position and striking distance, and treats a previous window beyond Bing's history as unavailable", async () => {
+    mockBing([site("https://example.com/")], {
+      GetRankAndTrafficStats: [
+        { Date: bingDate("2026-10-01"), Impressions: 50, Clicks: 5 },
+        { Date: bingDate("2026-10-10"), Impressions: 100, Clicks: 10 },
+        { Date: bingDate("2026-10-20"), Impressions: 200, Clicks: 20 },
+      ],
+      GetQueryStats: [
+        statsRow("near", bingDate("2026-10-20"), 300, 0, 8),
+        statsRow("top", bingDate("2026-10-20"), 100, 0, 2),
+      ],
+    });
+    const window = { startDate: "2026-10-15", endDate: "2026-10-25" };
+
+    const withHistory = await BingWebmasterService.getReport("example.com", {
+      window,
+      previousWindow: { startDate: "2026-10-02", endDate: "2026-10-14" },
+    });
+    const beyondHistory = await BingWebmasterService.getReport("example.com", {
+      window,
+      previousWindow: { startDate: "2026-09-20", endDate: "2026-10-09" },
+    });
+
+    expect(withHistory).toMatchObject({
+      totals: { clicks: 20, impressions: 200, ctr: 0.1, position: 6.5 },
+      prevTotals: { clicks: 10, impressions: 100 },
+      strikingDistance: [{ query: "near", impressions: 300, position: 8 }],
+    });
+    expect(beyondHistory).toMatchObject({
+      prevTotals: { clicks: 0, impressions: 0, ctr: 0, position: 0 },
     });
   });
 
