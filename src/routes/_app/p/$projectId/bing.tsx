@@ -4,16 +4,19 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { BingWebmasterPage } from "@/client/features/bing-webmaster/BingWebmasterPage";
-import {
-  BING_DEFAULT_DAYS,
-  bingSearchSchema,
-} from "@/types/schemas/bing-webmaster";
+import { bingSearchSchema } from "@/types/schemas/bing-webmaster";
+import { SEARCH_PERFORMANCE_DEFAULT_PAGE_SIZE } from "@/types/schemas/search-performance";
 
 export const Route = createFileRoute("/_app/p/$projectId/bing")({
   validateSearch: bingSearchSchema,
   search: {
     middlewares: [
-      stripSearchParams({ days: BING_DEFAULT_DAYS, tab: "queries" }),
+      stripSearchParams({
+        tab: "striking",
+        range: "last_28_days",
+        page: 1,
+        size: SEARCH_PERFORMANCE_DEFAULT_PAGE_SIZE,
+      }),
     ],
   },
   component: BingRoute,

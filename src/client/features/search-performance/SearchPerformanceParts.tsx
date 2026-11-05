@@ -14,21 +14,11 @@ import {
 import { TablePagination } from "@/client/components/table/TablePagination";
 import { Button } from "@/client/components/ui/button";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/client/components/ui/table";
-import {
   buildDimensionColumns,
   buildStrikingColumns,
-  formatCount,
-  formatCtr,
-  formatPosition,
   type Report,
   type SearchPerformanceTableRow,
+  type StrikingRow,
 } from "@/client/features/search-performance/SearchPerformanceColumns";
 import { normalizeExportValue, type CsvValue } from "@/client/lib/csv";
 import { exportRows } from "@/client/lib/exportRows";
@@ -44,14 +34,28 @@ export type ExportTarget = "csv" | "sheets";
 
 type ExportTable = { filename: string; headers: string[]; rows: CsvValue[][] };
 
-function strikingExportTable(report: Report): ExportTable {
+type StrikingReport = {
+  range: Report["range"];
+  strikingDistance: StrikingRow[];
+};
+
+function strikingExportTable(
+  report: StrikingReport,
+  showPage: boolean,
+): ExportTable {
   const stamp = `${report.range.startDate}-to-${report.range.endDate}`;
   return {
     filename: `search-performance-striking-distance-${stamp}`,
-    headers: ["Query", "Page", "Impressions", "Clicks", "Position"],
+    headers: [
+      "Query",
+      ...(showPage ? ["Page"] : []),
+      "Impressions",
+      "Clicks",
+      "Position",
+    ],
     rows: report.strikingDistance.map((row) => [
       row.query,
-      row.page,
+      ...(showPage ? [row.page ?? ""] : []),
       row.impressions,
       row.clicks,
       row.position,
@@ -96,10 +100,11 @@ function runExport(table: ExportTable, target: ExportTarget): Promise<void> {
 }
 
 export function exportStriking(
-  report: Report,
+  report: StrikingReport,
   target: ExportTarget,
+  showPage: boolean,
 ): Promise<void> {
-  return runExport(strikingExportTable(report), target);
+  return runExport(strikingExportTable(report, showPage), target);
 }
 
 /** Export the full queries/pages dataset (fetched separately, not the visible
@@ -118,96 +123,11 @@ export function exportDimensionRows(
   );
 }
 
-type Delta = { text: string; improved: boolean } | null;
-
-function percentDelta(current: number, previous: number): Delta {
-  if (previous <= 0) return null;
-  const change = (current - previous) / previous;
-  const pct = (change * 100).toFixed(1);
-  return { text: `${change >= 0 ? "+" : ""}${pct}%`, improved: change >= 0 };
-}
-
-/** Position falls as rankings improve, so the delta is inverted. */
-function positionDelta(current: number, previous: number): Delta {
-  if (previous <= 0 || current <= 0) return null;
-  const change = previous - current;
-  return {
-    text: `${change >= 0 ? "+" : ""}${change.toFixed(1)}`,
-    improved: change >= 0,
-  };
-}
-
-/** Discover and Google News report no position, so it is left out there. */
-export function TotalsTable({
-  report,
-  showPosition,
-}: {
-  report: Report;
-  showPosition: boolean;
-}) {
-  const { totals, prevTotals, range } = report;
-  const deltaTitle = `Compared with ${range.prevStartDate} to ${range.prevEndDate}`;
-  const metrics = [
-    {
-      label: "Clicks",
-      value: formatCount(totals.clicks),
-      delta: percentDelta(totals.clicks, prevTotals.clicks),
-    },
-    {
-      label: "Impressions",
-      value: formatCount(totals.impressions),
-      delta: percentDelta(totals.impressions, prevTotals.impressions),
-    },
-    {
-      label: "Click-through rate",
-      value: formatCtr(totals.ctr),
-      delta: percentDelta(totals.ctr, prevTotals.ctr),
-    },
-    ...(showPosition
-      ? [
-          {
-            label: "Average position",
-            value: formatPosition(totals.position),
-            delta: positionDelta(totals.position, prevTotals.position),
-          },
-        ]
-      : []),
-  ];
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-full">Metric</TableHead>
-            <TableHead className="min-w-32 text-right">Value</TableHead>
-            <TableHead className="min-w-32 text-right" title={deltaTitle}>
-              Change
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {metrics.map(({ label, value, delta }) => (
-            <TableRow key={label}>
-              <TableCell>{label}</TableCell>
-              <TableCell className="text-right tabular-nums">{value}</TableCell>
-              <TableCell
-                className={`text-right tabular-nums ${delta ? (delta.improved ? "text-success" : "text-destructive") : "text-muted-foreground"}`}
-                title={deltaTitle}
-              >
-                {delta?.text ?? "—"}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
 export function DimensionTable({
   rows,
   keyLabel,
   showPosition,
+  emptyState,
   isFiltered,
   isPastEnd,
   onClearFilters,
@@ -216,6 +136,7 @@ export function DimensionTable({
   rows: SearchPerformanceTableRow[];
   keyLabel: string;
   showPosition: boolean;
+  emptyState: { title: string; description: string };
   isFiltered: boolean;
   isPastEnd: boolean;
   onClearFilters: () => void;
@@ -247,10 +168,7 @@ export function DimensionTable({
                 </Button>
               ),
             }
-          : {
-              title: "No Search Console data yet",
-              description: "Search Console data can take a few days to appear.",
-            }
+          : emptyState
       }
     />
   );
@@ -259,6 +177,7 @@ export function DimensionTable({
 export function StrikingDistanceTable({
   projectId,
   rows,
+  showPage,
   page,
   pageSize,
   onPageChange,
@@ -267,7 +186,9 @@ export function StrikingDistanceTable({
   onClearFilters,
 }: {
   projectId: string;
-  rows: Report["strikingDistance"];
+  rows: StrikingRow[];
+  /** Bing reports no page per query, so its table leaves the column out. */
+  showPage: boolean;
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
@@ -278,7 +199,10 @@ export function StrikingDistanceTable({
   const queryClient = useQueryClient();
   const anchorRef = useSelectionAnchor();
   const [rowSelection, setRowSelection] = useState({});
-  const columns = useMemo(() => buildStrikingColumns(anchorRef), [anchorRef]);
+  const columns = useMemo(
+    () => buildStrikingColumns(anchorRef, showPage),
+    [anchorRef, showPage],
+  );
   const table = useDataTable({
     data: rows,
     columns,
@@ -337,8 +261,10 @@ export function StrikingDistanceTable({
     <>
       <div className="p-4">
         <p className="mb-3 text-sm text-muted-foreground">
-          Queries ranking at positions 5 to 20, sorted by impressions. Improve
-          the listed page to move them into the top results.
+          Queries ranking at positions 5 to 20, sorted by impressions.{" "}
+          {showPage
+            ? "Improve the listed page to move them into the top results."
+            : "Improve the pages that target them to move them into the top results."}
         </p>
         <DataTable
           table={table}

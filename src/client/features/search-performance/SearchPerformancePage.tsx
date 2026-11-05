@@ -30,9 +30,9 @@ import {
   exportDimensionRows,
   exportStriking,
   StrikingDistanceTable,
-  TotalsTable,
   type ExportTarget,
 } from "@/client/features/search-performance/SearchPerformanceParts";
+import { TotalsTable } from "@/client/features/search-performance/SearchPerformanceTotals";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import {
   exportSearchPerformanceTable,
@@ -179,7 +179,7 @@ export function SearchPerformancePage({
     setIsExporting(true);
     try {
       if (tab === "striking") {
-        await exportStriking(report, target);
+        await exportStriking(report, target, true);
         return;
       }
       const data = await exportSearchPerformanceTable({
@@ -347,6 +347,7 @@ export function SearchPerformancePage({
                 <StrikingDistanceTable
                   projectId={projectId}
                   rows={report.strikingDistance}
+                  showPage
                   page={page}
                   pageSize={pageSize}
                   onPageChange={(nextPage) =>
@@ -360,8 +361,19 @@ export function SearchPerformancePage({
                 />
               ) : (
                 <DimensionSection
-                  projectId={projectId}
                   tableQuery={tableQuery}
+                  unavailable={
+                    <GoogleConnectionCard
+                      provider="gsc"
+                      projectId={projectId}
+                    />
+                  }
+                  errorFallback="Failed to load Search Console data"
+                  emptyState={{
+                    title: "No Search Console data yet",
+                    description:
+                      "Search Console data can take a few days to appear.",
+                  }}
                   keyLabel={tab === "queries" ? "Query" : "Page"}
                   showPosition={isWeb}
                   page={page}

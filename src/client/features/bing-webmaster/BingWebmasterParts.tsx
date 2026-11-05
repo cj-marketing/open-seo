@@ -1,25 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
-import { createColumnHelper } from "@tanstack/react-table";
-import { Area, AreaChart } from "recharts";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { EmptyState } from "@/client/components/EmptyState";
-import {
-  ChartGrid,
-  ChartXAxis,
-  ChartYAxis,
-} from "@/client/components/ChartAxes";
-import { DataTable, useDataTable } from "@/client/components/table/DataTable";
-import { numericNullsLast } from "@/client/components/table/nullSafeSort";
-import { SortableHeader } from "@/client/components/table/SortableHeader";
-import { TablePagination } from "@/client/components/table/TablePagination";
-import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/client/components/ui/chart";
+import { QueryError } from "@/client/components/QueryState";
+import { SkeletonTableRows } from "@/client/components/SkeletonPresets";
 import {
   Table,
   TableBody,
@@ -28,234 +11,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/client/components/ui/table";
-import {
-  formatCount,
-  formatCtr,
-  formatPosition,
-} from "@/client/features/search-performance/SearchPerformanceColumns";
-import type {
-  getBingOverview,
-  getBingTable,
-} from "@/serverFunctions/bingWebmaster";
+import { formatCount } from "@/client/features/search-performance/SearchPerformanceColumns";
+import type { getBingCrawl } from "@/serverFunctions/bingWebmaster";
 
-type BingOverview = Extract<
-  Awaited<ReturnType<typeof getBingOverview>>,
+type BingCrawl = Extract<
+  Awaited<ReturnType<typeof getBingCrawl>>,
   { status: "ok" }
->;
-type BingTableResult = Extract<
-  Awaited<ReturnType<typeof getBingTable>>,
-  { status: "ok" }
->;
-type BingRow = BingTableResult["rows"][number];
-
-const TABLE_PAGE_SIZE = 25;
-
-export function BingTotals({
-  totals,
-}: {
-  totals: BingOverview["trend"]["totals"];
-}) {
-  const metrics = [
-    { label: "Impressions", value: formatCount(totals.impressions) },
-    { label: "Clicks", value: formatCount(totals.clicks) },
-    { label: "Click-through rate", value: formatCtr(totals.ctr) },
-  ];
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-full">Metric</TableHead>
-            <TableHead className="min-w-32 text-right">Value</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {metrics.map(({ label, value }) => (
-            <TableRow key={label}>
-              <TableCell>{label}</TableCell>
-              <TableCell className="text-right tabular-nums">{value}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-const trafficChartConfig = {
-  impressions: { label: "Impressions" },
-  clicks: { label: "Clicks" },
-} satisfies ChartConfig;
-
-function formatDay(date: string): string {
-  // Local-time construction: Date.parse("2026-08-01") is UTC midnight and
-  // would render as the previous day west of Greenwich.
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-/** Impressions on the left axis, clicks on the right: their scales differ by orders of magnitude. */
-export function BingTrafficChart({
-  rows,
-}: {
-  rows: BingOverview["trend"]["rows"];
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <ChartContainer config={trafficChartConfig} className="h-64 w-full">
-        <AreaChart
-          data={rows}
-          margin={{ top: 4, right: 0, bottom: 0, left: 0 }}
-        >
-          <ChartGrid />
-          <ChartXAxis dataKey="date" tickFormatter={formatDay} />
-          <ChartYAxis
-            yAxisId="impressions"
-            domain={[0, "auto"]}
-            tickFormatter={formatCount}
-          />
-          <ChartYAxis
-            yAxisId="clicks"
-            orientation="right"
-            domain={[0, "auto"]}
-            tickFormatter={formatCount}
-          />
-          <ChartTooltip
-            content={
-              <ChartTooltipContent
-                labelFormatter={(label: unknown) =>
-                  typeof label === "string" ? formatDay(label) : ""
-                }
-                valueFormatter={(value) => formatCount(Number(value))}
-              />
-            }
-          />
-          <ChartLegend content={<ChartLegendContent />} />
-          <Area
-            yAxisId="impressions"
-            type="monotone"
-            dataKey="impressions"
-            stroke="var(--color-impressions)"
-            fill="var(--color-impressions)"
-            fillOpacity={0.08}
-            strokeWidth={2}
-          />
-          <Area
-            yAxisId="clicks"
-            type="monotone"
-            dataKey="clicks"
-            stroke="var(--color-clicks)"
-            fill="var(--color-clicks)"
-            fillOpacity={0.08}
-            strokeWidth={2}
-          />
-        </AreaChart>
-      </ChartContainer>
-    </div>
-  );
-}
-
-const columnHelper = createColumnHelper<BingRow>();
-const rightAligned = {
-  headerClassName: "text-right",
-  cellClassName: "text-right tabular-nums",
-} as const;
-
-function buildColumns(keyLabel: string) {
-  return [
-    columnHelper.accessor("key", {
-      enableSorting: false,
-      header: () => keyLabel,
-      cell: ({ getValue }) => (
-        <span className="block max-w-xl truncate" title={getValue()}>
-          {getValue()}
-        </span>
-      ),
-    }),
-    columnHelper.accessor("clicks", {
-      header: ({ column }) => (
-        <SortableHeader column={column} label="Clicks" align="right" />
-      ),
-      cell: ({ getValue }) => formatCount(getValue()),
-      meta: rightAligned,
-    }),
-    columnHelper.accessor("impressions", {
-      header: ({ column }) => (
-        <SortableHeader column={column} label="Impressions" align="right" />
-      ),
-      cell: ({ getValue }) => formatCount(getValue()),
-      meta: rightAligned,
-    }),
-    columnHelper.accessor("ctr", {
-      header: ({ column }) => (
-        <SortableHeader column={column} label="CTR" align="right" />
-      ),
-      cell: ({ getValue }) => formatCtr(getValue()),
-      meta: rightAligned,
-    }),
-    columnHelper.accessor("avgImpressionPosition", {
-      header: ({ column }) => (
-        <SortableHeader column={column} label="Avg. position" align="right" />
-      ),
-      cell: ({ getValue }) => {
-        const value = getValue();
-        return value === null ? "–" : formatPosition(value);
-      },
-      sortingFn: numericNullsLast,
-      meta: rightAligned,
-    }),
-    columnHelper.accessor("weeks", {
-      header: ({ column }) => (
-        <SortableHeader column={column} label="Weeks" align="right" />
-      ),
-      meta: rightAligned,
-    }),
-  ];
-}
-
-/** Sorts and pages the fetched rows in the browser; Bing returns them all at once. */
-export function BingDimensionTable({
-  keyLabel,
-  rows,
-}: {
-  keyLabel: string;
-  rows: BingRow[];
-}) {
-  const columns = useMemo(() => buildColumns(keyLabel), [keyLabel]);
-  const table = useDataTable({
-    data: rows,
-    columns,
-    withSorting: true,
-    withPagination: true,
-    initialState: {
-      sorting: [{ id: "clicks", desc: true }],
-      pagination: { pageIndex: 0, pageSize: TABLE_PAGE_SIZE },
-    },
-  });
-  return (
-    <DataTable
-      table={table}
-      empty={{
-        title: "No Bing data yet",
-        description:
-          "Bing can take a few weeks to report data for a new or low-traffic site.",
-      }}
-      footer={
-        rows.length > TABLE_PAGE_SIZE ? (
-          <TablePagination
-            page={table.getState().pagination.pageIndex + 1}
-            pageSize={TABLE_PAGE_SIZE}
-            totalCount={rows.length}
-            onPageChange={(page) => table.setPageIndex(page - 1)}
-          />
-        ) : undefined
-      }
-    />
-  );
-}
+>["crawl"];
 
 function CrawlStat({ label, value }: { label: string; value: number }) {
   return (
@@ -268,7 +30,8 @@ function CrawlStat({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function BingCrawlHealth({ crawl }: { crawl: BingOverview["crawl"] }) {
+/** The Crawl tab body: latest crawl day, 30-day status breakdown and crawl issues. */
+function BingCrawlHealth({ crawl }: { crawl: BingCrawl }) {
   const { latest, last30Days, issues, issueCount } = crawl;
   const statuses = [
     { label: "2xx", value: last30Days.code2xx },
@@ -280,8 +43,7 @@ export function BingCrawlHealth({ crawl }: { crawl: BingOverview["crawl"] }) {
     { label: "Blocked by robots.txt", value: last30Days.blockedByRobotsTxt },
   ];
   return (
-    <div className="space-y-5 rounded-xl border border-border bg-card p-4">
-      <h2 className="text-lg font-semibold">Crawl health</h2>
+    <div className="space-y-5 p-4">
       <section className="space-y-2">
         <h3 className="text-sm font-medium text-muted-foreground">
           {latest ? `Latest day (${latest.date})` : "Latest day"}
@@ -351,6 +113,30 @@ export function BingCrawlHealth({ crawl }: { crawl: BingOverview["crawl"] }) {
       </section>
     </div>
   );
+}
+
+/** The Crawl tab body: loading, error with retry, or the crawl health. */
+export function BingCrawlTab({
+  crawlQuery,
+}: {
+  crawlQuery: UseQueryResult<BingCrawl | null>;
+}) {
+  if (crawlQuery.data) return <BingCrawlHealth crawl={crawlQuery.data} />;
+  // null: the report already handled the unavailable states for this project.
+  if (crawlQuery.data === null) return null;
+  if (crawlQuery.isError) {
+    return (
+      <div className="p-4">
+        <QueryError
+          error={crawlQuery.error}
+          fallback="Failed to load Bing data"
+          onRetry={() => void crawlQuery.refetch()}
+          isRetrying={crawlQuery.isFetching}
+        />
+      </div>
+    );
+  }
+  return <SkeletonTableRows className="p-4" />;
 }
 
 /** The expected "no Bing data for this project" states. */

@@ -36,7 +36,15 @@ type StrikingDistanceRow = {
 // where a content improvement most plausibly moves real traffic.
 const STRIKING_DISTANCE_MIN_POSITION = 5;
 const STRIKING_DISTANCE_MAX_POSITION = 20;
-const STRIKING_DISTANCE_ROW_LIMIT = 100;
+export const STRIKING_DISTANCE_ROW_LIMIT = 100;
+
+/** Shared with the Bing Performance page so both use one definition of the band. */
+export function isStrikingDistancePosition(position: number): boolean {
+  return (
+    position >= STRIKING_DISTANCE_MIN_POSITION &&
+    position <= STRIKING_DISTANCE_MAX_POSITION
+  );
+}
 
 export function sumSearchTotals(
   rows: GscSearchAnalyticsRow[],
@@ -113,10 +121,8 @@ export function buildStrikingDistanceRows(
   }
 
   return sort(
-    Array.from(topPageByQuery.values()).filter(
-      (row) =>
-        row.position >= STRIKING_DISTANCE_MIN_POSITION &&
-        row.position <= STRIKING_DISTANCE_MAX_POSITION,
+    Array.from(topPageByQuery.values()).filter((row) =>
+      isStrikingDistancePosition(row.position),
     ),
     (a, b) => b.impressions - a.impressions,
   ).slice(0, limit);

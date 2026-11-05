@@ -29,21 +29,17 @@ export type SearchPerformanceDateRange =
   (typeof SEARCH_PERFORMANCE_RANGES)[number];
 export type SearchPerformanceDevice = (typeof GSC_DEVICES)[number];
 
+/** A page or query text filter; also used by the Bing Performance page. */
+const searchPerformanceTextFilterSchema = z.object({
+  operator: z.enum(["contains", "equals"]),
+  expression: z.string().trim().min(1).max(4096),
+});
+
 // Shared report/table filters. Spread into each request schema so the overview
 // and the paginated table calls always accept the exact same filter surface.
 const searchPerformanceFilterShape = {
-  pageFilter: z
-    .object({
-      operator: z.enum(["contains", "equals"]),
-      expression: z.string().trim().min(1).max(4096),
-    })
-    .optional(),
-  queryFilter: z
-    .object({
-      operator: z.enum(["contains", "equals"]),
-      expression: z.string().trim().min(1).max(4096),
-    })
-    .optional(),
+  pageFilter: searchPerformanceTextFilterSchema.optional(),
+  queryFilter: searchPerformanceTextFilterSchema.optional(),
   projectId: z.string().min(1),
   searchType: z.enum(SEARCH_PERFORMANCE_TYPES).default("web"),
   dateRange: z.enum(SEARCH_PERFORMANCE_RANGES).default("last_28_days"),

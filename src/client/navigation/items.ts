@@ -2,7 +2,6 @@ import {
   Bookmark,
   Bot,
   Brain,
-  ChartColumn,
   ChartLine,
   ClipboardCheck,
   FileText,
@@ -15,6 +14,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { linkOptions } from "@tanstack/react-router";
+import { BingGlyphMuted } from "@/client/features/bing-webmaster/BingGlyph";
 import { GoogleGlyphMuted } from "@/client/features/gsc/GoogleGlyph";
 
 const projectNavItems = [
@@ -54,7 +54,7 @@ const projectNavItems = [
   {
     to: "/p/$projectId/bing" as const,
     label: "Bing Insights",
-    icon: ChartColumn,
+    icon: BingGlyphMuted,
   },
   {
     to: "/p/$projectId/domain" as const,
