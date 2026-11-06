@@ -41,8 +41,10 @@ import {
   TOP_UP_MAX_USD,
   TOP_UP_MIN_USD,
 } from "@/shared/billing";
+import { pageHead } from "@/client/lib/pageHead";
 
 export const Route = createFileRoute("/_app/billing")({
+  head: () => pageHead("Billing"),
   validateSearch: z.object({
     tab: z
       .enum(BILLING_TABS.map((item) => item.value))
@@ -336,7 +338,11 @@ function BillingPage() {
                         variant="ghost"
                         className="h-10"
                         disabled={pendingAction !== null}
-                        onClick={() => setBuyingCredits(false)}
+                        onClick={() => {
+                          setBuyingCredits(false);
+                          // A failed top-up's error belongs to that attempt.
+                          setError((e) => (e?.action === "topUp" ? null : e));
+                        }}
                       >
                         Cancel
                       </Button>

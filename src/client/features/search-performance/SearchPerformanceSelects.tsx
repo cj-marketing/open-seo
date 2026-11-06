@@ -61,36 +61,6 @@ function isDevice(value: string): value is SearchPerformanceDevice {
   return GSC_DEVICES.some((option) => option === value);
 }
 
-/** The date range select, shared with the Bing Performance toolbar. */
-export function DateRangeSelect({
-  value,
-  onChange,
-}: {
-  value: SearchPerformanceDateRange;
-  onChange: (range: SearchPerformanceDateRange) => void;
-}) {
-  return (
-    <Select
-      items={RANGE_OPTIONS}
-      value={value}
-      onValueChange={(next) => {
-        if (next != null && isDateRange(next)) onChange(next);
-      }}
-    >
-      <SelectTrigger size="sm" className="w-36" aria-label="Date range">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {RANGE_OPTIONS.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
 /** Search type, device, country, and date range selects of the table toolbar. */
 export function SearchPerformanceSelects({
   search,
@@ -190,7 +160,43 @@ export function SearchPerformanceSelects({
       <DateRangeSelect
         value={range}
         onChange={(value) => onSearchChange({ page: undefined, range: value })}
+        triggerClassName="w-36"
       />
     </div>
+  );
+}
+
+export function DateRangeSelect({
+  value,
+  onChange,
+  triggerClassName,
+}: {
+  value: SearchPerformanceDateRange;
+  onChange: (value: SearchPerformanceDateRange) => void;
+  triggerClassName?: string;
+}) {
+  return (
+    <Select
+      items={RANGE_OPTIONS}
+      value={value}
+      onValueChange={(next) => {
+        if (next != null && isDateRange(next)) onChange(next);
+      }}
+    >
+      <SelectTrigger
+        size="sm"
+        className={triggerClassName}
+        aria-label="Date range"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {RANGE_OPTIONS.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

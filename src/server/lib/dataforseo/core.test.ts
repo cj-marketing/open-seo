@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/lib/runtime-env", () => ({
@@ -31,6 +32,24 @@ describe("DataForSEO transport", () => {
       "Basic encoded-credentials",
     );
     expect(new Headers(init?.headers).get("Accept-Encoding")).toBe("gzip");
+  });
+
+  // The Docker edition's runtime hands the body over still gzipped because we
+  // set Accept-Encoding ourselves; parsing it raw failed every call.
+  it("inflates a body the runtime left gzipped", async () => {
+    const envelope = { status_code: 20000, tasks: [] };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(gzipSync(JSON.stringify(envelope)), {
+          headers: { "Content-Encoding": "gzip" },
+        }),
+      ),
+    );
+
+    await expect(
+      dataforseoPost("/v3/backlinks/summary/live", []),
+    ).resolves.toEqual(envelope);
   });
 
   // An unverified account answers with HTTP 403 (status_code 40104). Left as
@@ -70,25 +89,6 @@ describe("DataForSEO transport", () => {
       expect(fetchMock).toHaveBeenCalledOnce();
     },
   );
-
-  // The Docker edition's runtime hands the body back still gzip-compressed
-  // after we set Accept-Encoding, and every call failed in JSON.parse.
-  it("decodes a body that arrives still gzip-compressed", async () => {
-    const envelope = { status_code: 20000, tasks: [] };
-    const gzipped = new Response(JSON.stringify(envelope)).body!.pipeThrough(
-      new CompressionStream("gzip"),
-    );
-    vi.stubGlobal(
-      "fetch",
-      vi.fn<typeof fetch>().mockResolvedValue(
-        new Response(gzipped, { headers: { "Content-Encoding": "gzip" } }),
-      ),
-    );
-
-    await expect(
-      dataforseoPost("/v3/backlinks/summary/live", []),
-    ).resolves.toEqual(envelope);
-  });
 
   // Seen in production: headers arrive in time, then the deadline aborts
   // while the body is still streaming in.

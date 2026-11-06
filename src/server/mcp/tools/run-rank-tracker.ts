@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { waitUntil } from "cloudflare:workers";
 import { RankTrackingService } from "@/server/features/rank-tracking/services/RankTrackingService";
+import { AppError } from "@/server/lib/errors";
 import { captureServerEvent } from "@/server/lib/posthog";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
@@ -53,12 +54,19 @@ export const runRankTrackerTool = {
       projectId: args.projectId,
       billingCustomer: context.billing,
       maxCostCredits: args.maxCostCredits,
+    }).catch((error: unknown) => {
+      if (error instanceof AppError && error.code === "PAYMENT_REQUIRED")
+        throw new AppError(
+          "PAYMENT_REQUIRED",
+          "Rank checks need a paid OpenSEO plan, and this account doesn't have one. If Search Console is connected, get_search_console_performance shows the site's average positions for free; get_serp_results checks one keyword's live results for credits.",
+        );
+      throw error;
     });
     const trackerPath = `/p/${args.projectId}/rank-tracking/${args.trackerId}`;
 
     if (!result.ok) {
       return mcpResponse({
-        text: `A rank check is already running for tracker ${args.trackerId}${result.blockingRunId ? ` (run ${result.blockingRunId})` : ""}. No new run was created and no additional check was charged. Poll get_rank_tracker until lastCheckedAt advances.`,
+        text: `A rank check is already running for tracker ${args.trackerId}${result.blockingRunId ? ` (run ${result.blockingRunId})` : ""}. No new run was created and no additional check was charged. Poll get_rank_tracker with this trackerId until its Latest run line no longer says pending or running.`,
         meta: buildProjectMeta(context, args.projectId, trackerPath),
         structuredContent: {
           trackerId: args.trackerId,
@@ -83,7 +91,7 @@ export const runRankTrackerTool = {
     );
 
     return mcpResponse({
-      text: `Rank check ${result.runId} started for tracker ${args.trackerId}. It reads every keyword several times, so it can take up to 2 hours. Poll get_rank_tracker until lastCheckedAt advances, then read the updated positions.`,
+      text: `Rank check ${result.runId} started for tracker ${args.trackerId}. It reads every keyword several times, so it can take up to 2 hours. Poll get_rank_tracker with this trackerId until its Latest run line no longer says pending or running, then read the updated positions.`,
       meta: buildProjectMeta(context, args.projectId, trackerPath),
       structuredContent: {
         trackerId: args.trackerId,
