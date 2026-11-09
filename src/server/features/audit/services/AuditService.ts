@@ -164,7 +164,10 @@ async function startAudit(input: {
     throw error;
   }
 
-  await markOnboardingMilestone(input.billingCustomer, "auditStarted");
+  // Scheduled audits run as the placeholder "system" user: no one to onboard.
+  if (input.actorUserId !== "system") {
+    await markOnboardingMilestone(input.billingCustomer, "auditStarted");
+  }
   return { auditId };
 }
 

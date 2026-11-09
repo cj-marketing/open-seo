@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- the tracker service facade; competitor reads pushed it just past the limit */
 import { env } from "cloudflare:workers";
 import {
   customerHasPaidPlan,
@@ -387,9 +388,15 @@ async function getConfigs(projectId: string) {
   return RankTrackingRepository.getConfigsForProject(projectId);
 }
 
-async function getTracker(configId: string, projectId: string) {
+async function getTracker(
+  configId: string,
+  projectId: string,
+  includeCompetitors?: boolean,
+) {
   const config = await getValidatedConfig(configId, projectId);
-  const results = await getLatestResults(configId, projectId);
+  const results = await getLatestResults(configId, projectId, undefined, {
+    includeCompetitors,
+  });
   return { config, results };
 }
 

@@ -116,3 +116,29 @@ export const projectResearchLog = sqliteTable(
     ),
   ],
 );
+
+// Dated "what we changed" markers drawn on the Search Performance chart and
+// used to compare before/after. Unlike the research log they are never pruned:
+// an old change is still worth explaining a trend with.
+export const projectChangeNotes = sqliteTable(
+  "project_change_notes",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    // The day the change went live, YYYY-MM-DD (the same day stamp GSC uses).
+    noteDate: text("note_date").notNull(),
+    label: text("label").notNull(),
+    createdBy: text("created_by", { enum: ["user", "sam", "mcp"] }).notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  },
+  (table) => [
+    index("project_change_notes_project_date_idx").on(
+      table.projectId,
+      table.noteDate,
+    ),
+  ],
+);

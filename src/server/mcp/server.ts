@@ -127,6 +127,16 @@ import {
   deleteSiteAuditTool,
   listSiteAuditsTool,
 } from "@/server/mcp/tools/site-audit-cleanup-tools";
+import { compareSiteAuditsTool } from "@/server/mcp/tools/site-audit-compare-tools";
+import { setSiteAuditScheduleTool } from "@/server/mcp/tools/site-audit-schedule-tools";
+import {
+  listChangeNotesTool,
+  saveChangeNoteTool,
+} from "@/server/mcp/tools/change-note-tools";
+import {
+  getChangeNoteImpactTool,
+  getSearchConsoleInsightsTool,
+} from "@/server/mcp/tools/search-console-insight-tools";
 import { whoamiTool } from "@/server/mcp/tools/whoami";
 import { explorePromptTool } from "@/server/mcp/tools/explore-prompt";
 import { registerWidgetResource } from "@/server/mcp/widget-resource";
@@ -318,6 +328,10 @@ export function registerOpenSeoTools(
   register(setSearchConsoleSiteTool);
   register(getSearchConsolePerformanceTool);
   register(inspectUrlsTool);
+  register(getSearchConsoleInsightsTool);
+  register(saveChangeNoteTool);
+  register(listChangeNotesTool);
+  register(getChangeNoteImpactTool);
   register(getBingSearchPerformanceTool);
   register(getBingTrafficTrendTool);
   register(getBingCrawlHealthTool);
@@ -337,6 +351,8 @@ export function registerOpenSeoTools(
   register(runSiteAuditTool);
   register(listSiteAuditsTool);
   register(deleteSiteAuditTool);
+  register(compareSiteAuditsTool);
+  register(setSiteAuditScheduleTool);
   register(getAuditStatusTool);
   register(getAuditIssuesTool);
   register(getAuditPagesTool);

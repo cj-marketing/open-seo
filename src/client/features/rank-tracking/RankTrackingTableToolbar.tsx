@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, SlidersHorizontal, Table } from "lucide-react";
+import { CalendarDays, SlidersHorizontal, Table, Users } from "lucide-react";
 import { clamp } from "remeda";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import { ExportMenu } from "@/client/components/ExportMenu";
@@ -51,6 +51,8 @@ export function RankTrackingTableToolbar({
   checkBusy,
   checkDisabled,
   hasData,
+  showCompetitors,
+  onToggleCompetitors,
 }: {
   showFilters: boolean;
   onToggleFilters: () => void;
@@ -72,6 +74,8 @@ export function RankTrackingTableToolbar({
   checkBusy: boolean;
   checkDisabled: boolean;
   hasData: boolean;
+  showCompetitors: boolean;
+  onToggleCompetitors: () => void;
 }) {
   return (
     <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-2 border-y border-border">
@@ -109,6 +113,20 @@ export function RankTrackingTableToolbar({
         Filters
         {activeFilterCount > 0 && <Badge size="sm">{activeFilterCount}</Badge>}
       </Button>
+
+      {viewMode === "table" && (
+        <Button
+          variant="outline"
+          size="sm"
+          aria-pressed={showCompetitors}
+          className="aria-pressed:bg-muted aria-pressed:text-foreground"
+          onClick={onToggleCompetitors}
+          title="Show where your project's competitors rank for each keyword"
+        >
+          <Users data-icon="inline-start" />
+          Competitors
+        </Button>
+      )}
 
       {isRunning && latestRun ? (
         <div className="ml-2 flex items-center gap-2.5 text-sm font-medium text-foreground">

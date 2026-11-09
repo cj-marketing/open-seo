@@ -180,6 +180,7 @@ export const getLatestRankResults = createServerFn({ method: "POST" })
       data.configId,
       context.projectId,
       data.comparePeriod,
+      { includeCompetitors: data.includeCompetitors },
     );
   });
 

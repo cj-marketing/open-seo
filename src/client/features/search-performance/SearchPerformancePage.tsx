@@ -5,23 +5,25 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { QueryError } from "@/client/components/QueryState";
 import { ExportMenu } from "@/client/components/ExportMenu";
-import { Badge } from "@/client/components/ui/badge";
-import { Button } from "@/client/components/ui/button";
-import { Spinner } from "@/client/components/ui/spinner";
 import { DataTableTabs } from "@/client/components/table/DataTableToolbar";
 import { TabsTrigger } from "@/client/components/ui/tabs";
 import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
 import { DimensionSection } from "@/client/features/search-performance/SearchPerformanceDimensionSection";
-import { SearchPerformanceSelects } from "@/client/features/search-performance/SearchPerformanceSelects";
+import { SearchPerformanceToolbar } from "@/client/features/search-performance/SearchPerformanceToolbar";
 import { SearchPerformanceLoadingState } from "@/client/features/search-performance/SearchPerformanceLoadingState";
 import {
+  buildFilterInput,
   tableQueryOptions,
-  type FilterInput,
+  tabDimension,
 } from "@/client/features/search-performance/searchPerformanceQueries";
+import {
+  InsightTabBody,
+  InsightTabTriggers,
+} from "@/client/features/search-performance/SearchPerformanceInsights";
+import { SearchPerformanceChartCard } from "@/client/features/search-performance/SearchPerformanceChartCard";
 import {
   SearchPerformanceTextFilters,
   type TextFilters,
@@ -42,32 +44,7 @@ import {
   SEARCH_PERFORMANCE_DEFAULT_PAGE_SIZE,
   SEARCH_PERFORMANCE_TABS,
   type SearchPerformanceSearch,
-  type SearchPerformanceTab,
-  type SearchPerformanceTableDimension,
 } from "@/types/schemas/search-performance";
-
-function tabDimension(
-  tab: SearchPerformanceTab,
-): SearchPerformanceTableDimension {
-  return tab === "pages" ? "page" : "query";
-}
-
-function buildFilterInput({
-  type = "web",
-  range = "last_28_days",
-  device,
-  country,
-}: Pick<
-  SearchPerformanceSearch,
-  "type" | "range" | "device" | "country"
->): FilterInput {
-  return {
-    searchType: type,
-    dateRange: range,
-    ...(device ? { device } : {}),
-    ...(country ? { country } : {}),
-  };
-}
 
 export function SearchPerformancePage({
   projectId,
@@ -132,6 +109,7 @@ export function SearchPerformancePage({
   const report = reportQuery.data;
 
   const isTableTab = tab === "queries" || tab === "pages";
+  const isInsightTab = tab === "decay" || tab === "cannibalization";
   const dimension = tabDimension(tab);
   const tableQuery = useQuery({
     ...tableQueryOptions(projectId, dimension, page, pageSize, filterInput),
@@ -174,7 +152,12 @@ export function SearchPerformancePage({
   ]);
 
   const handleExport = async (target: ExportTarget) => {
-    if (!report?.connected || reportQuery.isPlaceholderData || isExporting)
+    if (
+      !report?.connected ||
+      reportQuery.isPlaceholderData ||
+      isExporting ||
+      isInsightTab
+    )
       return;
     setIsExporting(true);
     try {
@@ -279,7 +262,13 @@ export function SearchPerformancePage({
             {reportQuery.isPlaceholderData ? (
               <SearchPerformanceLoadingState />
             ) : (
-              <TotalsTable report={report} showPosition={isWeb} />
+              <>
+                <TotalsTable report={report} showPosition={isWeb} />
+                <SearchPerformanceChartCard
+                  projectId={projectId}
+                  report={report}
+                />
+              </>
             )}
             <div className="overflow-hidden rounded-xl border border-border bg-card">
               <DataTableTabs
@@ -296,7 +285,7 @@ export function SearchPerformancePage({
                     actions={["sheets", "csv"]}
                     onExport={(target) => void handleExport(target)}
                     busy={isExporting}
-                    disabled={reportQuery.isPlaceholderData}
+                    disabled={reportQuery.isPlaceholderData || isInsightTab}
                   />
                 }
               >
@@ -311,32 +300,17 @@ export function SearchPerformancePage({
                   </>
                 ) : null}
                 <TabsTrigger value="pages">Pages</TabsTrigger>
+                {isWeb ? <InsightTabTriggers /> : null}
               </DataTableTabs>
-              <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
-                <Button
-                  type="button"
-                  variant={showFilters ? "secondary" : "ghost"}
-                  size="sm"
-                  aria-expanded={showFilters}
-                  aria-controls="search-performance-filters"
-                  onClick={() => setShowFilters((current) => !current)}
-                  title="Toggle table filters"
-                >
-                  <SlidersHorizontal data-icon="inline-start" />
-                  Filters
-                  {activeFilterCount > 0 ? (
-                    <Badge size="sm">{activeFilterCount}</Badge>
-                  ) : null}
-                </Button>
-                {reportQuery.isFetching && !reportQuery.isPending ? (
-                  <Spinner className="size-4 text-muted-foreground" />
-                ) : null}
-                <SearchPerformanceSelects
-                  search={search}
-                  countries={report.countries}
-                  onSearchChange={onSearchChange}
-                />
-              </div>
+              <SearchPerformanceToolbar
+                showFilters={showFilters}
+                onToggleFilters={() => setShowFilters((current) => !current)}
+                activeFilterCount={activeFilterCount}
+                isFetching={reportQuery.isFetching && !reportQuery.isPending}
+                search={search}
+                countries={report.countries}
+                onSearchChange={onSearchChange}
+              />
 
               {showFilters ? filtersPanel : null}
               {reportQuery.isPlaceholderData ? (
@@ -356,6 +330,14 @@ export function SearchPerformancePage({
                   onPageSizeChange={(size) =>
                     onSearchChange({ page: undefined, size })
                   }
+                  isFiltered={activeFilterCount > 0}
+                  onClearFilters={resetFilters}
+                />
+              ) : isInsightTab ? (
+                <InsightTabBody
+                  tab={tab}
+                  projectId={projectId}
+                  filterInput={filterInput}
                   isFiltered={activeFilterCount > 0}
                   onClearFilters={resetFilters}
                 />

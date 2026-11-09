@@ -37,6 +37,25 @@ export interface RankTrackingDeviceResult {
   checkedAt: string | null;
 }
 
+/**
+ * One competitor on one device. A null position with a `checkedAt` means the
+ * check did not find the domain in the results it returned (which does not
+ * prove it ranks below the SERP depth); null for both means no check has read
+ * this competitor yet.
+ */
+export interface RankTrackingCompetitorDeviceResult {
+  position: number | null;
+  previousPosition: number | null;
+  rankingUrl: string | null;
+  checkedAt: string | null;
+}
+
+export interface RankTrackingCompetitorResult {
+  domain: string;
+  desktop: RankTrackingCompetitorDeviceResult;
+  mobile: RankTrackingCompetitorDeviceResult;
+}
+
 export interface RankTrackingRow {
   trackingKeywordId: string;
   keyword: string;
@@ -47,6 +66,8 @@ export interface RankTrackingRow {
   cpc: number | null;
   desktop: RankTrackingDeviceResult;
   mobile: RankTrackingDeviceResult;
+  /** Only when competitors were requested: one entry per tracked competitor. */
+  competitors?: RankTrackingCompetitorResult[];
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +126,7 @@ export const getLatestResultsSchema = z.object({
   projectId: z.string().uuid(),
   configId: z.string().uuid(),
   comparePeriod: comparePeriodSchema.optional(),
+  includeCompetitors: z.boolean().optional(),
 });
 
 export const getLatestRunSchema = z.object({

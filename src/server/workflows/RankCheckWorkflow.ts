@@ -11,6 +11,7 @@ import {
   type BillingCustomerContext,
 } from "@/server/billing/subscription";
 import { RankTrackingRepository } from "@/server/features/rank-tracking/repositories/RankTrackingRepository";
+import { loadRankCompetitorDomains } from "@/server/features/rank-tracking/services/rankCompetitors";
 import { failRunIfActive } from "@/server/features/rank-tracking/services/rankCheckRunGuards";
 import { runQueuedCheck } from "@/server/workflows/rankCheckPaths";
 import {
@@ -58,6 +59,8 @@ interface RankCheckParams {
 async function prepareRankCheckKeywords(input: {
   runId: string;
   configId: string;
+  projectId: string;
+  domain: string;
   billingCustomer: BillingCustomerContext;
   devices: RankCheckParams["devices"];
   serpDepth: number;
@@ -124,11 +127,27 @@ async function prepareRankCheckKeywords(input: {
     keywordsTotal: trackingKeywords.length,
   });
 
+  // Read once per run. Competitors are extra, so a failed read leaves them
+  // out instead of failing the check. A short list of domains, so the step
+  // output stays small.
+  let competitors: string[] = [];
+  try {
+    competitors = await loadRankCompetitorDomains(
+      input.projectId,
+      input.domain,
+    );
+  } catch (error) {
+    console.warn(
+      `[rank-check] ${input.runId} competitors not loaded: ${describeError(error)}`,
+    );
+  }
+
   return {
     keywords: trackingKeywords.map((kw) => ({
       id: kw.id,
       keyword: kw.keyword,
     })),
+    competitors,
     readsEndAt: Date.now() + READ_WINDOW_MS,
   };
 }
@@ -371,6 +390,8 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
           prepareRankCheckKeywords({
             runId,
             configId,
+            projectId,
+            domain,
             billingCustomer,
             devices,
             serpDepth,
@@ -398,6 +419,7 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
           languageCode,
           locationName,
           runId,
+          competitors: prepareResult.competitors,
         };
         await runQueuedCheck(step, checkContext);
         await retryRankChecks(

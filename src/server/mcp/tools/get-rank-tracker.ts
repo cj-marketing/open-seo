@@ -20,6 +20,7 @@ import {
 } from "@/server/mcp/table";
 import { projectIdSchema } from "@/server/mcp/schemas";
 import { googleSerpUrl } from "@/shared/google-serp-url";
+import type { RankTrackingRow } from "@/types/schemas/rank-tracking";
 
 const RANK_RESULT_COLUMNS: McpTableColumn<unknown>[] = [
   // Put the removal id before provider text that may be truncated.
@@ -52,6 +53,38 @@ const RANK_RESULT_COLUMNS: McpTableColumn<unknown>[] = [
   },
   { header: "google serp", value: (row) => readPath(row, "googleSerpUrl") },
 ];
+
+/** One competitor on one device: its position, or why there is none. */
+function competitorCell(
+  row: RankTrackingRow,
+  domain: string,
+  device: "desktop" | "mobile",
+) {
+  const result = row.competitors?.find((c) => c.domain === domain)?.[device];
+  if (!result) return null;
+  if (result.position !== null) {
+    return result.previousPosition !== null &&
+      result.previousPosition !== result.position
+      ? `${result.position} (was ${result.previousPosition})`
+      : result.position;
+  }
+  // A checked read that did not find the domain is not "below the depth".
+  return result.checkedAt ? "not found" : null;
+}
+
+function competitorColumns(
+  domains: string[],
+  devices: "both" | "desktop" | "mobile",
+): McpTableColumn<RankTrackingRow>[] {
+  const deviceList =
+    devices === "both" ? (["desktop", "mobile"] as const) : [devices];
+  return domains.flatMap((domain) =>
+    deviceList.map((device) => ({
+      header: `${domain} (${device})`,
+      value: (row: RankTrackingRow) => competitorCell(row, domain, device),
+    })),
+  );
+}
 
 function formatLocation(code: unknown, name: unknown): string {
   const codeCell = formatMcpCell(code);
@@ -130,6 +163,13 @@ function formatLatestRun(
   return `Latest run: ${run.status}. A check reads every keyword several times, so it can take up to 2 hours. Positions below are from the last completed check until then.`;
 }
 
+function formatCompetitorNote(domains: string[]): string {
+  if (domains.length === 0) {
+    return "Competitors: none tracked. Add competitor domains with update_project_context; positions appear after the next check.";
+  }
+  return `Competitors (${domains.length}): ${domains.join(", ")}. Read from the same Google results as your own position, starting with the next check, with no backfill; — means no check has read it yet. "not found" means the domain was not in the results that check returned, which does not prove it ranks below the SERP depth.`;
+}
+
 const inputSchema = {
   projectId: projectIdSchema,
   trackerId: z
@@ -153,6 +193,12 @@ const inputSchema = {
     .optional()
     .describe(
       "Keyword rows per page when trackerId is provided. Defaults to 100. Lower this if the text is truncated.",
+    ),
+  includeCompetitors: z
+    .boolean()
+    .optional()
+    .describe(
+      "When trackerId is provided, also return where the project's competitors (from project context, up to 10) ranked for each keyword, from the same Google reads as your own position, at no extra cost. Competitor data exists only for checks run after this feature shipped; it is empty until the next check.",
     ),
 } as const;
 
@@ -224,6 +270,7 @@ export const getRankTrackerTool = {
     const { config, results } = await RankTrackingService.getTracker(
       args.trackerId,
       args.projectId,
+      args.includeCompetitors,
     );
     const offset = args.offset ?? 0;
     const limit = args.limit ?? 100;
@@ -240,6 +287,7 @@ export const getRankTrackerTool = {
         ...row,
         googleSerpUrl: googleSerpUrl(row.keyword, config),
       }));
+    const competitorDomains = results.competitors ?? [];
     const totalCount = results.rows.length;
     const nextOffset =
       offset + rows.length < totalCount ? offset + rows.length : null;
@@ -256,12 +304,18 @@ export const getRankTrackerTool = {
                 : "No check has run yet, so blank positions don't mean unranked; the first scheduled check fills them in.",
             ]
           : [])),
+      ...(args.includeCompetitors
+        ? [formatCompetitorNote(competitorDomains)]
+        : []),
       `Keywords (${totalCount}):`,
       totalCount === 0
         ? "No keywords tracked yet."
         : rows.length === 0
           ? "No keywords at this offset."
-          : formatMcpTable(rows, RANK_RESULT_COLUMNS),
+          : formatMcpTable(rows, [
+              ...RANK_RESULT_COLUMNS,
+              ...competitorColumns(competitorDomains, config.devices),
+            ]),
     ].join("\n");
     return mcpResponse({
       text,

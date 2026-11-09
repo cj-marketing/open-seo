@@ -9,6 +9,7 @@ import { resolveUserContextFromHeaders } from "@/middleware/ensure-user/resolve"
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
 import { SamSessionRepository } from "@/server/features/sam/SamSessionRepository";
 import { runScheduledRankChecks } from "@/server/features/rank-tracking/services/scheduledRankChecks";
+import { runScheduledAudits } from "@/server/features/audit/services/scheduledAudits";
 import { reconcileStaleAudits } from "@/server/features/audit/services/auditReconciler";
 import { sendFirstAuditEmails } from "@/server/features/audit/services/firstAuditEmails";
 import { getOrCreateOrganizationCustomer } from "@/server/billing/subscription";
@@ -326,6 +327,7 @@ export default {
     // run makes names (gateway-attribution.ts).
     const checks = await Promise.allSettled([
       withPgClient(() => runScheduledRankChecks(env)),
+      withPgClient(() => runScheduledAudits()),
       withPgClient(async () => {
         const { runScheduledAiVisibility } =
           await import("@/server/features/ai-visibility/services/scheduledAiVisibility");

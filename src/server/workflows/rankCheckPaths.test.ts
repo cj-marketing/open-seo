@@ -2,11 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowStep } from "cloudflare:workers";
 import type { RankCheckTaskInput } from "@/server/lib/dataforseo";
 import { retryRankChecks } from "./rankCheckRetries";
+import {
+  expandToTaskInputs,
+  runQueuedCheck,
+  runQueuedTasks,
+} from "./rankCheckPaths";
 
 const mocks = vi.hoisted(() => ({
   getSnapshotsForRun: vi.fn(),
   getBestPositionsForKeywords: vi.fn(),
   upsertSnapshots: vi.fn(),
+  insertSnapshots: vi.fn(),
+  updateRun: vi.fn(),
+  upsertBestCompetitorSnapshots: vi.fn(),
   deleteNotFoundSnapshots: vi.fn(),
   fetchRankCheckTaskResult: vi.fn(),
   rankCheckTaskPost: vi.fn(),
@@ -35,6 +43,7 @@ const step = { sleep: vi.fn() } as unknown as WorkflowStep;
 function checkContext(
   keywordIds: string[],
   devices: "desktop" | "both" = "desktop",
+  competitors?: string[],
 ) {
   return {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the check paths only call this serp method
@@ -46,6 +55,7 @@ function checkContext(
     locationCode: 2840,
     languageCode: "en",
     runId: "run_1",
+    competitors,
   };
 }
 
@@ -70,6 +80,7 @@ function retry(ctx: ReturnType<typeof checkContext>, readsEndAt = Infinity) {
 }
 
 beforeEach(() => {
+  mocks.upsertBestCompetitorSnapshots.mockResolvedValue(undefined);
   mocks.rankCheckTaskPost.mockImplementation(
     async ({ tasks }: { tasks: RankCheckTaskInput[] }) =>
       tasks.map((task) => ({ ...task, taskId: `task_${task.keywordId}` })),
@@ -179,5 +190,109 @@ describe("retryRankChecks", () => {
     expect(mocks.deleteNotFoundSnapshots).toHaveBeenCalledExactlyOnceWith([
       { runId: "run_1", trackingKeywordId: "kw_never", device: "desktop" },
     ]);
+  });
+});
+
+const rival = (position: number | null) => ({
+  domain: "rival.com",
+  position,
+  url: position === null ? null : "https://rival.com/page",
+});
+
+describe("competitor positions", () => {
+  /** Each task_get answers with the next position for us and the rival. */
+  function queuedPairs(...reads: Array<[number | null, number | null]>) {
+    for (const [own, rivalPosition] of reads) {
+      mocks.fetchRankCheckTaskResult.mockImplementationOnce(
+        async (task: RankCheckTaskInput) => ({
+          status: "completed",
+          result: {
+            ...task,
+            position: own,
+            url: null,
+            serpFeatures: [],
+            competitors: [rival(rivalPosition)],
+          },
+        }),
+      );
+    }
+  }
+
+  it("posts exactly the tasks it posts without competitors", async () => {
+    mocks.getSnapshotsForRun.mockResolvedValue([snapshot("kw_new", 5)]);
+    queuedResults(4, 6);
+    await retry(checkContext(["kw_new"]));
+    const withoutCompetitors = [...mocks.rankCheckTaskPost.mock.calls];
+    expect(withoutCompetitors).toHaveLength(2);
+
+    mocks.rankCheckTaskPost.mockClear();
+    queuedPairs([4, 9], [6, 8]);
+    await retry(checkContext(["kw_new"], "desktop", ["rival.com"]));
+
+    expect(mocks.rankCheckTaskPost.mock.calls).toEqual(withoutCompetitors);
+  });
+
+  it("saves every read of a competitor, including a read where our position is settled", async () => {
+    mocks.getSnapshotsForRun.mockResolvedValue([snapshot("kw_new", 5)]);
+    queuedPairs([5, 7], [5, null]);
+
+    await retry(checkContext(["kw_new"], "desktop", ["rival.com"]));
+
+    const row = (position: number | null) => [
+      [
+        {
+          runId: "run_1",
+          trackingKeywordId: "kw_new",
+          device: "desktop",
+          ...rival(position),
+        },
+      ],
+    ];
+    expect(mocks.upsertBestCompetitorSnapshots.mock.calls).toEqual([
+      row(7),
+      row(null),
+    ]);
+  });
+
+  it("keeps our own snapshot and the run going when saving competitors fails", async () => {
+    mocks.getSnapshotsForRun.mockResolvedValue([snapshot("kw_new", 5)]);
+    mocks.upsertBestCompetitorSnapshots.mockRejectedValue(new Error("db"));
+    queuedPairs([4, 9], [6, 8]);
+
+    await retry(checkContext(["kw_new"], "desktop", ["rival.com"]));
+
+    expect(mocks.upsertSnapshots).toHaveBeenCalledExactlyOnceWith([
+      expect.objectContaining({ trackingKeywordId: "kw_new", position: 4 }),
+    ]);
+  });
+
+  it("saves the first read's competitors after our own snapshot, even when that fails", async () => {
+    mocks.upsertBestCompetitorSnapshots.mockRejectedValue(new Error("db"));
+    queuedPairs([3, 6]);
+
+    await runQueuedCheck(
+      step,
+      checkContext(["kw_new"], "desktop", ["rival.com"]),
+    );
+
+    expect(mocks.insertSnapshots).toHaveBeenCalledExactlyOnceWith([
+      expect.objectContaining({ trackingKeywordId: "kw_new", position: 3 }),
+    ]);
+    expect(mocks.upsertBestCompetitorSnapshots).toHaveBeenCalledOnce();
+  });
+
+  it("keeps competitor reads out of the collected results, which the workflow stores between steps", async () => {
+    queuedPairs([3, 6]);
+    const ctx = checkContext(["kw_new"], "desktop", ["rival.com"]);
+
+    const collected = await runQueuedTasks(
+      step,
+      ctx,
+      expandToTaskInputs(ctx.keywords, ctx.devices),
+      "",
+    );
+
+    expect(collected).toHaveLength(1);
+    expect(collected[0]).not.toHaveProperty("competitors");
   });
 });

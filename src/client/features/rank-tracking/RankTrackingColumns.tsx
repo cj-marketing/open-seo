@@ -16,6 +16,7 @@ import {
   VolumeCell,
 } from "./RankTrackingTableParts";
 import type { SelectionAnchor } from "@/client/components/table/tableSelection";
+import { makeCompetitorColumn } from "./RankTrackingCompetitors";
 
 export const RANK_TRACKING_HEADER_CLASS =
   "text-xs uppercase tracking-wide text-muted-foreground";
@@ -254,6 +255,8 @@ export function useRankTrackingColumns(options: {
   onKeywordClick: (row: RankTrackingRow) => void;
   onSetPinned: (vars: { trackingKeywordId: string; pinned: boolean }) => void;
   locationName?: string | null;
+  /** Competitor domains to add a position column for. */
+  competitorDomains?: string[];
 }): ColumnDef<RankTrackingRow>[] {
   const {
     showDesktop,
@@ -263,6 +266,7 @@ export function useRankTrackingColumns(options: {
     onKeywordClick,
     onSetPinned,
     locationName,
+    competitorDomains,
   } = options;
   const locationLabel = locationName
     ? formatLocationLabel(locationName, 2)
@@ -281,6 +285,12 @@ export function useRankTrackingColumns(options: {
       cols.push(makeDeviceColumn("mobile"));
       cols.push(makeUrlColumn("mobile", domain));
     }
+    // One device is shown at a time, so competitors follow that one.
+    for (const competitor of competitorDomains ?? []) {
+      cols.push(
+        makeCompetitorColumn(competitor, showDesktop ? "desktop" : "mobile"),
+      );
+    }
     cols.push(makeVolumeColumn(locationLabel), kdColumn, cpcColumn);
     if (showDesktop) {
       cols.push(makeSerpColumn("desktop"));
@@ -297,5 +307,6 @@ export function useRankTrackingColumns(options: {
     onKeywordClick,
     onSetPinned,
     locationLabel,
+    competitorDomains,
   ]);
 }

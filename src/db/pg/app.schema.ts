@@ -443,6 +443,42 @@ export const rankSnapshots = pgTable(
   ],
 );
 
+// Where each configured competitor ranked for a tracked keyword in a check run.
+// Written from the same SERP reads as rank_snapshots, so it costs no extra
+// task. A null position means the domain was not in the results the check
+// returned, which does not prove it ranks below the SERP depth. Rows exist only
+// for runs made after competitor tracking shipped; there is no backfill.
+export const rankCompetitorSnapshots = pgTable(
+  "rank_competitor_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => rankCheckRuns.id, { onDelete: "cascade" }),
+    // No FK to rankTrackingKeywords, for the same reason as rank_snapshots.
+    trackingKeywordId: text("tracking_keyword_id").notNull(),
+    device: text("device", { enum: ["desktop", "mobile"] }).notNull(),
+    domain: text("domain").notNull(),
+    position: integer("position"),
+    url: text("url"),
+    checkedAt: timestampColumn("checked_at").notNull().default(isoNow),
+  },
+  (table) => [
+    index("rank_competitor_snapshots_keyword_device_idx").on(
+      table.trackingKeywordId,
+      table.device,
+      table.domain,
+      table.checkedAt,
+    ),
+    uniqueIndex("rank_competitor_snapshots_run_keyword_device_domain_idx").on(
+      table.runId,
+      table.trackingKeywordId,
+      table.device,
+      table.domain,
+    ),
+  ],
+);
+
 // Dashboard activation milestones. Organization-scoped: MCP OAuth grants are
 // user-level, so any member connecting an external MCP client satisfies the
 // milestone for the whole organization. Timestamps are first-occurrence only

@@ -99,4 +99,6 @@ export const auditSearchSchema = z.object({
   // Pre-fills the launch form (the dashboard's "Audit your site" step).
   url: z.string().optional().catch(undefined),
   tab: z.enum(auditTabs).catch("issues").default("issues"),
+  // Shows the compare view against this earlier audit of the project.
+  compareTo: z.string().optional().catch(undefined),
 });

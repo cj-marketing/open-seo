@@ -144,36 +144,70 @@ export async function fetchLiveSerp(
   };
 }
 
+/** Where one competitor domain ranked in a read; null when it was not in it. */
+export interface CompetitorRankRead {
+  domain: string;
+  position: number | null;
+  url: string | null;
+}
+
 export interface RankCheckResult {
   keywordId: string;
   keyword: string;
   position: number | null;
   url: string | null;
   serpFeatures: string[];
+  /** Set only when the check tracks competitors: one entry per competitor. */
+  competitors?: CompetitorRankRead[];
 }
 
-function buildRankCheckResult(
-  input: { keywordId: string; keyword: string; targetDomain: string },
-  items: SerpLiveItem[],
-): RankCheckResult {
-  const target = input.targetDomain.toLowerCase();
-  const organicMatch = items.find((item) => {
+/** First organic result on the domain or one of its subdomains. */
+function findOrganicMatch(items: SerpLiveItem[], targetDomain: string) {
+  const target = targetDomain.toLowerCase();
+  return items.find((item) => {
     if (item.type !== "organic" || item.domain == null) return false;
     const domain = item.domain.toLowerCase();
     return domain === target || domain.endsWith(`.${target}`);
   });
+}
+
+// rank_group = position among organic results only (what users count as
+// "my ranking"). rank_absolute would also count SERP features (local pack, PAA,
+// AI overviews) and reads as worse than what users see.
+function organicPosition(item: SerpLiveItem | undefined): number | null {
+  return item ? (item.rank_group ?? item.rank_absolute ?? null) : null;
+}
+
+function buildRankCheckResult(
+  input: {
+    keywordId: string;
+    keyword: string;
+    targetDomain: string;
+    competitorDomains?: string[];
+  },
+  items: SerpLiveItem[],
+): RankCheckResult {
+  const organicMatch = findOrganicMatch(items, input.targetDomain);
+  const competitorDomains = input.competitorDomains ?? [];
 
   return {
     keywordId: input.keywordId,
     keyword: input.keyword,
-    // rank_group = position among organic results only (what users count as
-    // "my ranking"). rank_absolute would also count SERP features (local
-    // pack, PAA, AI overviews) and reads as worse than what users see.
-    position: organicMatch
-      ? (organicMatch.rank_group ?? organicMatch.rank_absolute ?? null)
-      : null,
+    position: organicPosition(organicMatch),
     url: organicMatch?.url ?? null,
     serpFeatures: [...new Set(items.map((item) => item.type).filter(Boolean))],
+    // Read from the same results as our own position, so tracking competitors
+    // adds no request.
+    ...(competitorDomains.length > 0 && {
+      competitors: competitorDomains.map((domain) => {
+        const match = findOrganicMatch(items, domain);
+        return {
+          domain,
+          position: organicPosition(match),
+          url: match?.url ?? null,
+        };
+      }),
+    }),
   };
 }
 
@@ -279,6 +313,8 @@ export async function fetchRankCheckTaskResult(input: {
   keywordId: string;
   keyword: string;
   targetDomain: string;
+  /** Normalized competitor domains to read from the same results. */
+  competitorDomains?: string[];
 }): Promise<RankCheckTaskOutcome> {
   const outcome = await fetchSerpTaskResult(input.taskId);
   if (outcome.status !== "completed") return outcome;

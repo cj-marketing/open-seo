@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   captureServerEvent: vi.fn(),
   isHostedServerAuthMode: vi.fn(),
   sendCreditsExhaustedEvent: vi.fn(),
+  loadRankCompetitorDomains: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -34,6 +35,9 @@ vi.mock(
 );
 vi.mock("@/server/features/rank-tracking/services/rankCheckRunGuards", () => ({
   failRunIfActive: mocks.failRunIfActive,
+}));
+vi.mock("@/server/features/rank-tracking/services/rankCompetitors", () => ({
+  loadRankCompetitorDomains: mocks.loadRankCompetitorDomains,
 }));
 vi.mock("@/server/workflows/rankCheckPaths", () => ({
   runQueuedCheck: mocks.runQueuedCheck,
@@ -132,6 +136,7 @@ describe("rank check workflow credit ceiling", () => {
     mocks.getRunById.mockResolvedValue(activeRun);
     mocks.getSnapshotsForRun.mockResolvedValue([]);
     mocks.updateRun.mockResolvedValue(true);
+    mocks.loadRankCompetitorDomains.mockResolvedValue([]);
     mocks.isHostedServerAuthMode.mockResolvedValue(true);
     mocks.autumnCheck.mockResolvedValue({
       allowed: true,
@@ -214,6 +219,47 @@ describe("rank check workflow credit ceiling", () => {
     expect(mocks.runQueuedCheck).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ keywords: keywords(count) }),
+    );
+  });
+});
+
+describe("rank check competitors", () => {
+  beforeEach(() => {
+    mocks.getConfigById.mockResolvedValue({ isActive: true });
+    mocks.getRunById.mockResolvedValue(activeRun);
+    mocks.getKeywordsForConfig.mockResolvedValue(keywords(2));
+    mocks.getSnapshotsForRun.mockResolvedValue([]);
+    mocks.updateRun.mockResolvedValue(true);
+    mocks.isHostedServerAuthMode.mockResolvedValue(true);
+    mocks.autumnCheck.mockResolvedValue({
+      allowed: true,
+      balance: { remaining: 1_000 },
+    });
+  });
+
+  it("reads the project's competitors once, without the tracked domain, and hands them to the check", async () => {
+    mocks.loadRankCompetitorDomains.mockResolvedValue(["rival.com"]);
+
+    await runWorkflow({});
+
+    expect(mocks.loadRankCompetitorDomains).toHaveBeenCalledExactlyOnceWith(
+      "project_1",
+      "example.com",
+    );
+    expect(mocks.runQueuedCheck).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ competitors: ["rival.com"] }),
+    );
+  });
+
+  it("checks without competitors when they cannot be read", async () => {
+    mocks.loadRankCompetitorDomains.mockRejectedValue(new Error("db down"));
+
+    await runWorkflow({});
+
+    expect(mocks.runQueuedCheck).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ competitors: [] }),
     );
   });
 });

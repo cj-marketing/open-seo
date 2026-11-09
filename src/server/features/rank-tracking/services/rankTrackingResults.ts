@@ -1,5 +1,6 @@
 import { RankTrackingRepository } from "@/server/features/rank-tracking/repositories/RankTrackingRepository";
 import { toRankTrackingTimestamp } from "@/server/features/rank-tracking/rankTrackingTimestamps";
+import { getCompetitorResults } from "@/server/features/rank-tracking/services/rankCompetitorResults";
 import { AppError } from "@/server/lib/errors";
 import type { ComparePeriod } from "@/types/schemas/rank-tracking-search";
 import type {
@@ -22,7 +23,10 @@ export async function getLatestResults(
   configId: string,
   projectId: string,
   comparePeriod: ComparePeriod = "7d",
+  options: { includeCompetitors?: boolean } = {},
 ): Promise<{
+  /** Tracked competitor domains; only when competitors were requested. */
+  competitors?: string[];
   rows: RankTrackingRow[];
   run: {
     id: string;
@@ -135,7 +139,31 @@ export async function getLatestResults(
     }
   }
 
+  // A failure here must not take our own positions down with it.
+  let competitors: string[] | undefined;
+  if (options.includeCompetitors) {
+    try {
+      const found = await getCompetitorResults({
+        configId,
+        projectId,
+        trackedDomain: config.domain,
+        compareDate: targetDate,
+      });
+      competitors = found.domains;
+      for (const row of rows.values()) {
+        row.competitors = found.domains.map((domain) => ({
+          domain,
+          desktop: found.forCell(row.trackingKeywordId, "desktop", domain),
+          mobile: found.forCell(row.trackingKeywordId, "mobile", domain),
+        }));
+      }
+    } catch (error) {
+      console.warn("[rank-tracking] competitor positions not loaded:", error);
+    }
+  }
+
   return {
+    ...(competitors && { competitors }),
     rows: [...rows.values()],
     run: latestRun
       ? {

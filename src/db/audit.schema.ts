@@ -4,6 +4,7 @@ import {
   integer,
   real,
   index,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import { PAGE_FETCH_CLASSES } from "@/shared/audit-fetch-class";
@@ -144,6 +145,12 @@ export const auditIssues = sqliteTable(
   (table) => [
     index("audit_issues_audit_type_idx").on(table.auditId, table.issueType),
     index("audit_issues_page_id_idx").on(table.pageId),
+    // Audit compare matches an issue to the other audit's by (type, page).
+    index("audit_issues_audit_type_page_idx").on(
+      table.auditId,
+      table.issueType,
+      table.pageUrl,
+    ),
   ],
 );
 
@@ -174,5 +181,47 @@ export const auditLighthouseResults = sqliteTable(
   (table) => [
     index("audit_lighthouse_results_audit_id_idx").on(table.auditId),
     index("audit_lighthouse_results_page_id_idx").on(table.pageId),
+  ],
+);
+
+// One recurring audit per project. Off by default; the cron starts an audit
+// through AuditService when next_check_at is due.
+export const auditSchedules = sqliteTable(
+  "audit_schedules",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    startUrl: text("start_url").notNull(),
+    maxPages: integer("max_pages").notNull(),
+    lighthouseStrategy: text("lighthouse_strategy", {
+      enum: ["auto", "none"],
+    })
+      .notNull()
+      .default("none"),
+    renderJavaScript: integer("render_javascript", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    scheduleInterval: text("schedule_interval", { enum: ["monthly"] })
+      .notNull()
+      .default("monthly"),
+    isActive: integer("is_active", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    nextCheckAt: text("next_check_at"),
+    lastStartedAt: text("last_started_at"),
+    lastSkipReason: text("last_skip_reason"),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [
+    uniqueIndex("audit_schedules_project_id_idx").on(table.projectId),
+    index("audit_schedules_due_idx").on(table.isActive, table.nextCheckAt),
   ],
 );

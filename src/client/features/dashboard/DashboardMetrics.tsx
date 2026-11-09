@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Line, LineChart, XAxis, YAxis } from "recharts";
 import { cn } from "cn";
 import {
@@ -91,14 +92,17 @@ function formatTrendDay(date: string): string {
 /**
  * One line per key of `config`, each on its own hidden scale so a small series
  * stays readable beside a large one. Exact values are in the tooltip. It fills
- * the height left in the card, so side-by-side cards stay level.
+ * the height left in the card, so side-by-side cards stay level. Children are
+ * extra chart layers drawn over the lines, for example reference markers.
  */
 export function TrendChart({
   config,
   data,
+  children,
 }: {
   config: ChartConfig;
   data: Record<string, string | number>[];
+  children?: ReactNode;
 }) {
   const series = Object.keys(config);
   return (
@@ -134,6 +138,7 @@ export function TrendChart({
               isAnimationActive={false}
             />
           ))}
+          {children}
         </LineChart>
       </ChartContainer>
     </div>

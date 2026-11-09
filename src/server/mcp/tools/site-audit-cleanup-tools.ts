@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { requireOrgPermission } from "@/server/auth/org-gate";
+import { AuditScheduleService } from "@/server/features/audit/services/AuditScheduleService";
 import { AuditService } from "@/server/features/audit/services/AuditService";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
@@ -17,10 +18,11 @@ export const listSiteAuditsTool = {
   config: {
     title: "List site audits",
     description:
-      "Lists this project's site audits with IDs, URLs, status, page counts, and dates, newest first. Uses no credits. Use this to find an older audit to read or delete; get_audit_status defaults to the newest audit only.",
+      "Lists this project's site audits with IDs, URLs, status, page counts, and dates, newest first, plus its monthly audit schedule if one exists (see set_site_audit_schedule). Uses no credits. Use this to find an older audit to read or delete; get_audit_status defaults to the newest audit only.",
     inputSchema: listInputSchema,
     outputSchema: z.looseObject({
       audits: z.array(looseObjectOutputSchema),
+      schedule: looseObjectOutputSchema.nullable().optional(),
       ...optionalMetaOutputSchema,
     }),
     annotations: {
@@ -31,22 +33,30 @@ export const listSiteAuditsTool = {
   },
   handler: withMcpProjectAuth(
     async (args: z.infer<z.ZodObject<typeof listInputSchema>>, context) => {
-      const audits = await AuditService.getHistory(args.projectId);
+      const [audits, schedule] = await Promise.all([
+        AuditService.getHistory(args.projectId),
+        AuditScheduleService.getSchedule(args.projectId),
+      ]);
+      const scheduleText = schedule
+        ? `
+Monthly audit: ${schedule.isActive ? `on, next run ${schedule.nextCheckAt}` : "off"}.`
+        : "";
       return mcpResponse({
-        text: audits.length
-          ? audits
-              .map(
-                (audit) =>
-                  `${audit.id}  ${audit.startUrl}  ${audit.status}  ${audit.pagesCrawled} pages  ${audit.startedAt}`,
-              )
-              .join("\n")
-          : "No site audits in this project.",
+        text:
+          (audits.length
+            ? audits
+                .map(
+                  (audit) =>
+                    `${audit.id}  ${audit.startUrl}  ${audit.status}  ${audit.pagesCrawled} pages  ${audit.startedAt}`,
+                )
+                .join("\n")
+            : "No site audits in this project.") + scheduleText,
         meta: buildProjectMeta(
           context,
           args.projectId,
           `/p/${args.projectId}/audit`,
         ),
-        structuredContent: { audits },
+        structuredContent: { audits, schedule },
       });
     },
   ),

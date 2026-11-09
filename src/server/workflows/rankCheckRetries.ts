@@ -11,6 +11,7 @@ import {
   expandToTaskInputs,
   mapResultsToSnapshotRows,
   runQueuedTasks,
+  saveCompetitorReads,
   type CheckContext,
   type RankCheckResultWithDevice,
 } from "@/server/workflows/rankCheckPaths";
@@ -171,7 +172,17 @@ export async function retryRankChecks(
       `[rank-check] ${ctx.runId} read ${read}: ${toRead.length} check(s)`,
     );
     const label = `read-${read}-`;
-    const collected = await runQueuedTasks(step, ctx, toRead, label);
+    // Every read of a competitor counts toward its best position, including
+    // those of pairs whose own position is already settled.
+    const collected = await runQueuedTasks(
+      step,
+      ctx,
+      toRead,
+      label,
+      ctx.competitors?.length
+        ? (results) => saveCompetitorReads(ctx.runId, results)
+        : undefined,
+    );
     const readPairs = pairs;
     ({ pairs, canReadAgain } = await pgStep(
       step,

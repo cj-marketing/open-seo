@@ -1,5 +1,6 @@
 import { ConfirmDialog } from "@/client/components/ConfirmDialog";
 import { PageHeader } from "@/client/components/PageHeader";
+import { AuditScheduleCard } from "@/client/features/audit/launch/AuditScheduleCard";
 import { AuditHistorySection } from "@/client/features/audit/launch/AuditHistorySection";
 import { LaunchFormCard } from "@/client/features/audit/launch/LaunchFormCard";
 import { useLaunchController } from "@/client/features/audit/launch/useLaunchController";
@@ -42,6 +43,13 @@ export function LaunchView({
           maxPagesLimit={controller.maxPagesLimit}
           canRenderJavaScript={controller.canRenderJavaScript}
           outOfCredits={controller.outOfCredits}
+        />
+
+        <AuditScheduleCard
+          projectId={projectId}
+          defaultUrl={controller.historyQuery.data?.[0]?.startUrl ?? initialUrl}
+          maxPagesLimit={controller.maxPagesLimit}
+          canRenderJavaScript={controller.canRenderJavaScript}
         />
 
         <AuditHistorySection

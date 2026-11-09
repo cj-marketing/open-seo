@@ -41,6 +41,7 @@ export function RankTrackingTable({
   serpDepth,
   onAddKeywords,
   onClearFilters,
+  competitorDomains,
 }: {
   totalCount: number;
   rows: RankTrackingRow[];
@@ -57,6 +58,7 @@ export function RankTrackingTable({
   serpDepth: number;
   onAddKeywords: () => void;
   onClearFilters: () => void;
+  competitorDomains?: string[];
 }) {
   const queryClient = useQueryClient();
   const [showConfirm, setShowConfirm] = useState(false);
@@ -83,6 +85,7 @@ export function RankTrackingTable({
     onKeywordClick: handleKeywordClick,
     onSetPinned: setKeywordPinned,
     locationName,
+    competitorDomains,
   });
 
   // The pinned column sorts first and stays out of the sorting the page owns.

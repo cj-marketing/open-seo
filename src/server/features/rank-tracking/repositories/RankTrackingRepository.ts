@@ -42,6 +42,10 @@ import {
   deleteNotFoundSnapshots,
   getSnapshotsForRun,
 } from "./runQueries";
+import {
+  upsertBestCompetitorSnapshots,
+  getCompetitorSnapshotsForConfig,
+} from "./competitorSnapshotQueries";
 
 // ---------------------------------------------------------------------------
 // Config CRUD
@@ -456,4 +460,6 @@ export const RankTrackingRepository = {
   getKeywordHistory,
   getConfigTrend,
   getPositionMatrix,
+  upsertBestCompetitorSnapshots,
+  getCompetitorSnapshotsForConfig,
 };

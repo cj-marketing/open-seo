@@ -4,6 +4,7 @@ import {
   index,
   integer,
   pgTable,
+  uniqueIndex,
   real,
   text,
 } from "drizzle-orm/pg-core";
@@ -143,6 +144,12 @@ export const auditIssues = pgTable(
   (table) => [
     index("audit_issues_audit_type_idx").on(table.auditId, table.issueType),
     index("audit_issues_page_id_idx").on(table.pageId),
+    // Audit compare matches an issue to the other audit's by (type, page).
+    index("audit_issues_audit_type_page_idx").on(
+      table.auditId,
+      table.issueType,
+      table.pageUrl,
+    ),
   ],
 );
 
@@ -173,5 +180,39 @@ export const auditLighthouseResults = pgTable(
   (table) => [
     index("audit_lighthouse_results_audit_id_idx").on(table.auditId),
     index("audit_lighthouse_results_page_id_idx").on(table.pageId),
+  ],
+);
+
+// One recurring audit per project. Off by default; the cron starts an audit
+// through AuditService when next_check_at is due.
+export const auditSchedules = pgTable(
+  "audit_schedules",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    startUrl: text("start_url").notNull(),
+    maxPages: integer("max_pages").notNull(),
+    lighthouseStrategy: text("lighthouse_strategy", {
+      enum: ["auto", "none"],
+    })
+      .notNull()
+      .default("none"),
+    renderJavaScript: boolean("render_javascript").notNull().default(false),
+    scheduleInterval: text("schedule_interval", { enum: ["monthly"] })
+      .notNull()
+      .default("monthly"),
+    isActive: boolean("is_active").notNull().default(false),
+    nextCheckAt: timestampColumn("next_check_at"),
+    lastStartedAt: timestampColumn("last_started_at"),
+    lastSkipReason: text("last_skip_reason"),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdAt: timestampColumn("created_at").notNull().default(isoNow),
+    updatedAt: timestampColumn("updated_at").notNull().default(isoNow),
+  },
+  (table) => [
+    uniqueIndex("audit_schedules_project_id_idx").on(table.projectId),
+    index("audit_schedules_due_idx").on(table.isActive, table.nextCheckAt),
   ],
 );

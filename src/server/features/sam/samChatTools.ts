@@ -40,6 +40,16 @@ import {
   getAuditStatusTool,
   runSiteAuditTool,
 } from "@/server/mcp/tools/site-audit-tools";
+import { compareSiteAuditsTool } from "@/server/mcp/tools/site-audit-compare-tools";
+import { setSiteAuditScheduleTool } from "@/server/mcp/tools/site-audit-schedule-tools";
+import {
+  buildSaveChangeNoteTool,
+  listChangeNotesTool,
+} from "@/server/mcp/tools/change-note-tools";
+import {
+  getChangeNoteImpactTool,
+  getSearchConsoleInsightsTool,
+} from "@/server/mcp/tools/search-console-insight-tools";
 import { listSavedKeywordsTool } from "@/server/mcp/tools/list-saved-keywords";
 import { removeSavedKeywordsTool } from "@/server/mcp/tools/remove-saved-keywords";
 import { buildUpdateProjectContextTool } from "@/server/mcp/tools/project-context";
@@ -430,6 +440,10 @@ export function buildSamMcpTools(
     get_keyword_metrics: adaptTool(getKeywordMetricsTool),
     get_search_console_performance: adaptTool(getSearchConsolePerformanceTool),
     inspect_urls: adaptTool(inspectUrlsTool),
+    get_search_console_insights: adaptTool(getSearchConsoleInsightsTool),
+    save_change_note: adaptTool(buildSaveChangeNoteTool("sam")),
+    list_change_notes: adaptTool(listChangeNotesTool),
+    get_change_note_impact: adaptTool(getChangeNoteImpactTool),
     // Unconditional like the MCP server's registrations — the GA4 launch gate
     // was removed in #505.
     get_google_analytics_organic_landing_pages: adaptObjectTool(
@@ -464,5 +478,7 @@ export function buildSamMcpTools(
     get_audit_status: waitingAuditStatusTool(adaptTool),
     get_audit_issues: adaptTool(getAuditIssuesTool),
     get_audit_pages: adaptTool(getAuditPagesTool),
+    compare_site_audits: adaptTool(compareSiteAuditsTool),
+    set_site_audit_schedule: adaptTool(setSiteAuditScheduleTool),
   };
 }

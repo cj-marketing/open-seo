@@ -27,6 +27,8 @@ import {
   getAuditStatus,
   getCrawlProgress,
 } from "@/serverFunctions/audit";
+import { CompareControl } from "@/client/features/audit/compare/CompareControl";
+import { CompareView } from "@/client/features/audit/compare/CompareView";
 import { ResultsView } from "@/client/features/audit/results/ResultsView";
 import {
   BotProtectionAdvice,
@@ -42,14 +44,19 @@ export function AuditDetail({
   projectId,
   auditId,
   tab,
+  compareTo,
   onBack,
   onTabChange,
+  onCompareChange,
 }: {
   projectId: string;
   auditId: string;
   tab: string;
+  /** Earlier audit this one is being compared with, when set. */
+  compareTo?: string;
   onBack: () => void;
   onTabChange: (tab: "issues" | "pages" | "performance") => void;
+  onCompareChange: (baseAuditId: string | undefined) => void;
 }) {
   const statusQuery = useQuery({
     queryKey: ["audit-status", projectId, auditId],
@@ -131,6 +138,13 @@ export function AuditDetail({
               Site audit &middot; Started {formatStartedAt(status.startedAt)}
             </p>
           </div>
+          {isComplete && !compareTo ? (
+            <CompareControl
+              projectId={projectId}
+              auditId={auditId}
+              onCompare={onCompareChange}
+            />
+          ) : null}
         </div>
 
         {isRunning && (
@@ -191,7 +205,16 @@ export function AuditDetail({
           </Alert>
         )}
 
-        {(isComplete || isFailed) && (
+        {isComplete && compareTo ? (
+          <CompareView
+            projectId={projectId}
+            baseAuditId={compareTo}
+            targetAuditId={auditId}
+            onClose={() => onCompareChange(undefined)}
+          />
+        ) : null}
+
+        {(isComplete || isFailed) && !(isComplete && compareTo) && (
           <QueryState
             query={resultsQuery}
             errorFallback="Failed to load the audit results"

@@ -1,13 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import { GscService } from "@/server/features/gsc/services/GscService";
+import { resolveDateRange } from "@/server/features/gsc/searchAnalytics";
 import {
-  GscNotConnectedError,
-  GscService,
-  isExpectedGrantFailure,
-} from "@/server/features/gsc/services/GscService";
-import {
-  resolveDateRange,
-  type GscPerformanceFilter,
-} from "@/server/features/gsc/searchAnalytics";
+  buildGscFilters,
+  isExpectedConnectionFailure,
+} from "@/server/features/gsc/gscRequestHelpers";
 import {
   buildDailyTrend,
   buildStrikingDistanceRows,
@@ -17,7 +14,6 @@ import {
 } from "@/server/features/gsc/searchPerformanceReport";
 import { requireProjectContext } from "@/serverFunctions/middleware";
 import {
-  type SearchPerformanceType,
   searchPerformanceInputSchema,
   searchPerformanceTableExportInputSchema,
   searchPerformanceTableInputSchema,
@@ -31,42 +27,6 @@ const COUNTRY_ROW_LIMIT = 25;
 // Export pulls the whole dimension in one shot, capped at GSC's per-call max
 // (GSC_MAX_ROW_LIMIT). Large stores get everything up to this ceiling.
 const EXPORT_ROW_LIMIT = 1000;
-
-/** Build GSC filter groups shared by every call. Device, page, and query apply everywhere;
- *  country applies everywhere except the country breakdown itself (so the
- *  dropdown keeps every option visible while one country is selected). */
-function buildGscFilters(data: {
-  searchType: SearchPerformanceType;
-  device?: string;
-  country?: string;
-  pageFilter?: { operator: "contains" | "equals"; expression: string };
-  queryFilter?: { operator: "contains" | "equals"; expression: string };
-}): {
-  nonCountryFilters: GscPerformanceFilter[];
-  filters: GscPerformanceFilter[];
-} {
-  const nonCountryFilters: GscPerformanceFilter[] = data.device
-    ? [{ dimension: "device", operator: "equals", expression: data.device }]
-    : [];
-  if (data.pageFilter)
-    nonCountryFilters.push({ dimension: "page", ...data.pageFilter });
-  // Discover and Google News have no query dimension to filter on.
-  if (data.queryFilter && data.searchType === "web")
-    nonCountryFilters.push({ dimension: "query", ...data.queryFilter });
-  const filters: GscPerformanceFilter[] = data.country
-    ? [
-        ...nonCountryFilters,
-        { dimension: "country", operator: "equals", expression: data.country },
-      ]
-    : nonCountryFilters;
-  return { nonCountryFilters, filters };
-}
-
-/** Not connected, or a dead/denied grant (token failure or 401/403): the page
- *  renders the connect card. Other statuses (429, 5xx) are real faults. */
-function isExpectedConnectionFailure(error: unknown): boolean {
-  return error instanceof GscNotConnectedError || isExpectedGrantFailure(error);
-}
 
 /**
  * The Search Performance overview: current + previous-period totals, the

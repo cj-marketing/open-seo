@@ -24,6 +24,7 @@ import {
   countMatrixRuns,
   RankTrackingHistoryMatrix,
 } from "./RankTrackingHistoryMatrix";
+import { CompetitorNote } from "./RankTrackingCompetitors";
 import { RankTrackingTableToolbar } from "./RankTrackingTableToolbar";
 import { exportRankTracking } from "./RankTrackingTableParts";
 import type { RankTrackingConfig } from "@/types/schemas/rank-tracking";
@@ -93,6 +94,7 @@ export function RankTrackingDomainDetail({
   const queryClient = useQueryClient();
   const [showAddKeywords, setShowAddKeywords] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showCompetitors, setShowCompetitors] = useState(false);
   const filters = useMemo(
     () => filterValuesFromSearch(search, EMPTY_FILTERS),
     [search],
@@ -115,10 +117,22 @@ export function RankTrackingDomainDetail({
   // The route keys this component by config, so previous data here is always
   // the same domain at another compare period.
   const resultsQuery = useQuery({
-    queryKey: ["rankTrackingResults", projectId, config.id, comparePeriod],
+    queryKey: [
+      "rankTrackingResults",
+      projectId,
+      config.id,
+      comparePeriod,
+      showCompetitors,
+    ],
     queryFn: () =>
       getLatestRankResults({
-        data: { projectId, configId: config.id, comparePeriod },
+        data: {
+          projectId,
+          configId: config.id,
+          comparePeriod,
+          // Only asked for when shown, so the default load is unchanged.
+          includeCompetitors: showCompetitors || undefined,
+        },
       }),
     placeholderData: keepPreviousData,
   });
@@ -308,6 +322,8 @@ export function RankTrackingDomainDetail({
           checkBusy={isBusy}
           checkDisabled={planStatus !== "paid"}
           hasData={filtered.length > 0}
+          showCompetitors={showCompetitors}
+          onToggleCompetitors={() => setShowCompetitors((c) => !c)}
         />
 
         {/* Filters panel */}
@@ -321,7 +337,10 @@ export function RankTrackingDomainDetail({
         )}
 
         {/* Table */}
-        <div className="p-4">
+        <div className="space-y-3 p-4">
+          {showCompetitors && effectiveViewMode === "table" && resultsData && (
+            <CompetitorNote domains={resultsData.competitors ?? []} />
+          )}
           {effectiveViewMode === "history" ? (
             <RankTrackingHistoryMatrix
               cells={matrixCells ?? []}
@@ -366,6 +385,9 @@ export function RankTrackingDomainDetail({
                   serpDepth={config.serpDepth}
                   onAddKeywords={() => setShowAddKeywords(true)}
                   onClearFilters={() => setFilters(EMPTY_FILTERS)}
+                  competitorDomains={
+                    showCompetitors ? results.competitors : undefined
+                  }
                 />
               )}
             </QueryState>

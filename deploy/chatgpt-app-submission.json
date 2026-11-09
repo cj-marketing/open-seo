@@ -68,6 +68,30 @@
         "destructive_justification": "Can clear sections or remove saved competitors, key pages, custom sections, and research-log entries when explicitly requested."
       }
     },
+    "save_change_note": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Adds a dated change note to the selected project in the user's private OpenSEO workspace.",
+        "open_world_justification": "Operates only on private OpenSEO state or private provider data and cannot change publicly visible internet state.",
+        "destructive_justification": "Only adds a note and does not delete or overwrite existing data."
+      }
+    },
+    "list_change_notes": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves the selected project's stored change notes.",
+        "open_world_justification": "Operates only on private OpenSEO state or private provider data and cannot change publicly visible internet state.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, send messages, or perform irreversible actions."
+      }
+    },
     "list_saved_keywords": {
       "annotations": {
         "readOnlyHint": true,
@@ -436,6 +460,30 @@
       },
       "justifications": {
         "read_only_justification": "Only retrieves URL inspection information from a user-authorized Search Console property.",
+        "open_world_justification": "Reads user-authorized Google data and cannot change Google or publicly visible internet state.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, send messages, or perform irreversible actions."
+      }
+    },
+    "get_search_console_insights": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves performance rows from a user-authorized Search Console property and compares them.",
+        "open_world_justification": "Reads user-authorized Google data and cannot change Google or publicly visible internet state.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, send messages, or perform irreversible actions."
+      }
+    },
+    "get_change_note_impact": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves performance rows from a user-authorized Search Console property and compares them around a saved change note.",
         "open_world_justification": "Reads user-authorized Google data and cannot change Google or publicly visible internet state.",
         "destructive_justification": "Does not delete, overwrite, revoke access, send messages, or perform irreversible actions."
       }

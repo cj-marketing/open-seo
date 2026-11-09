@@ -1,4 +1,5 @@
 import type { WorkflowStep } from "cloudflare:workers";
+import { omit } from "remeda";
 import { RankTrackingRepository } from "@/server/features/rank-tracking/repositories/RankTrackingRepository";
 import {
   fetchRankCheckTaskResult,
@@ -39,6 +40,43 @@ export function mapResultsToSnapshotRows(
   }));
 }
 
+function mapResultsToCompetitorRows(
+  runId: string,
+  results: RankCheckResultWithDevice[],
+) {
+  return results.flatMap((r) =>
+    (r.competitors ?? []).map((competitor) => ({
+      runId,
+      trackingKeywordId: r.keywordId,
+      device: r.device,
+      domain: competitor.domain,
+      position: competitor.position,
+      url: competitor.url,
+    })),
+  );
+}
+
+/**
+ * Save the competitor positions read with these results, keeping the best per
+ * domain across a run's reads. Competitor data is extra: a failed write is
+ * logged and never fails the check or touches our own snapshots.
+ */
+export async function saveCompetitorReads(
+  runId: string,
+  results: RankCheckResultWithDevice[],
+): Promise<void> {
+  const rows = mapResultsToCompetitorRows(runId, results);
+  if (rows.length === 0) return;
+  try {
+    await RankTrackingRepository.upsertBestCompetitorSnapshots(rows);
+  } catch (error) {
+    console.warn(
+      `[rank-check] ${runId} competitor positions not saved:`,
+      error,
+    );
+  }
+}
+
 export interface CheckContext {
   client: ReturnType<typeof createDataforseoClient>;
   keywords: KeywordEntry[];
@@ -49,6 +87,8 @@ export interface CheckContext {
   languageCode: string;
   locationName?: string;
   runId: string;
+  /** Normalized competitor domains read from the same results. */
+  competitors?: string[];
 }
 
 /** Expand keywords into one task input per keyword/device pair. */
@@ -127,6 +167,7 @@ async function fetchQueuedRound(
           keywordId: task.keywordId,
           keyword: task.keyword,
           targetDomain: ctx.domain,
+          competitorDomains: ctx.competitors,
         }),
       ),
     );
@@ -214,7 +255,14 @@ export async function runQueuedTasks(
           if (onCollected && fetched.completed.length > 0) {
             await onCollected(fetched.completed);
           }
-          return fetched;
+          // Competitor reads are saved above; keep them out of the step
+          // output, which the engine stores and replays.
+          return {
+            ...fetched,
+            completed: fetched.completed.map((result) =>
+              omit(result, ["competitors"]),
+            ),
+          };
         },
       );
       collected.push(...outcome.completed);
@@ -247,6 +295,7 @@ export async function runQueuedCheck(
       await RankTrackingRepository.insertSnapshots(
         mapResultsToSnapshotRows(ctx.runId, results),
       );
+      await saveCompetitorReads(ctx.runId, results);
       // Progress for the UI; finalize recounts from the DB anyway.
       const snapshots = await RankTrackingRepository.getSnapshotsForRun(
         ctx.runId,
