@@ -10,6 +10,7 @@ import {
   createGuestAccount,
   verifyGuestTurnstile,
 } from "@/server/auth/guest-accounts";
+import { guestClaimCookie } from "@/server/auth/guest-cookies";
 import {
   buildAuthorizeRequestFromConsentQuery,
   completeMcpGrant,
@@ -88,11 +89,13 @@ export async function handleOAuthGuestRequest(
     return jsonResponse(signIn);
   }
 
-  const guest = await createGuestAccount(
-    request,
-    eligibility.ipHash,
-    (organization) => getAuth().api.createOrganization({ body: organization }),
+  const guest = await createGuestAccount(request, eligibility, (organization) =>
+    getAuth().api.createOrganization({ body: organization }),
   );
+  if (!guest) {
+    console.log("mcp.guest refused: ip_limit (concurrent)");
+    return jsonResponse(signIn);
+  }
   const redirectTo = await completeMcpGrant({
     request,
     oauth,
@@ -101,5 +104,8 @@ export async function handleOAuthGuestRequest(
     context: guest,
     guestClaimToken: guest.claimToken,
   });
-  return jsonResponse({ redirectTo });
+  return jsonResponse(
+    { redirectTo },
+    { headers: { "Set-Cookie": guestClaimCookie(guest.claimToken) } },
+  );
 }

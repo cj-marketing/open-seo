@@ -31,7 +31,6 @@ import { Route as AuthenticatedOauthConsentRouteImport } from './routes/_authent
 import { Route as AuthenticatedSubscribeRouteImport } from './routes/_authenticated.subscribe'
 import { Route as AuthenticatedYcRouteImport } from './routes/_authenticated.yc'
 import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitation.$id'
-import { Route as ApiGuestClaimRouteImport } from './routes/api/guest-claim'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiPrivacyRegionRouteImport } from './routes/api/privacy-region'
 import { Route as ApiSignUpStatusRouteImport } from './routes/api/sign-up-status'
@@ -192,11 +191,6 @@ const AuthenticatedYcRoute = AuthenticatedYcRouteImport.update({
 const AcceptInvitationIdRoute = AcceptInvitationIdRouteImport.update({
   id: '/accept-invitation/$id',
   path: '/accept-invitation/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiGuestClaimRoute = ApiGuestClaimRouteImport.update({
-  id: '/api/guest-claim',
-  path: '/api/guest-claim',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
@@ -496,7 +490,6 @@ export interface FileRoutesByFullPath {
   '/subscribe': typeof AuthenticatedSubscribeRoute
   '/yc': typeof AuthenticatedYcRoute
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
-  '/api/guest-claim': typeof ApiGuestClaimRoute
   '/api/health': typeof ApiHealthRoute
   '/api/privacy-region': typeof ApiPrivacyRegionRoute
   '/api/sign-up-status': typeof ApiSignUpStatusRoute
@@ -568,7 +561,6 @@ export interface FileRoutesByTo {
   '/subscribe': typeof AuthenticatedSubscribeRoute
   '/yc': typeof AuthenticatedYcRoute
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
-  '/api/guest-claim': typeof ApiGuestClaimRoute
   '/api/health': typeof ApiHealthRoute
   '/api/privacy-region': typeof ApiPrivacyRegionRoute
   '/api/sign-up-status': typeof ApiSignUpStatusRoute
@@ -639,7 +631,6 @@ export interface FileRoutesById {
   '/_authenticated/subscribe': typeof AuthenticatedSubscribeRoute
   '/_authenticated/yc': typeof AuthenticatedYcRoute
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
-  '/api/guest-claim': typeof ApiGuestClaimRoute
   '/api/health': typeof ApiHealthRoute
   '/api/privacy-region': typeof ApiPrivacyRegionRoute
   '/api/sign-up-status': typeof ApiSignUpStatusRoute
@@ -715,7 +706,6 @@ export interface FileRouteTypes {
     | '/subscribe'
     | '/yc'
     | '/accept-invitation/$id'
-    | '/api/guest-claim'
     | '/api/health'
     | '/api/privacy-region'
     | '/api/sign-up-status'
@@ -787,7 +777,6 @@ export interface FileRouteTypes {
     | '/subscribe'
     | '/yc'
     | '/accept-invitation/$id'
-    | '/api/guest-claim'
     | '/api/health'
     | '/api/privacy-region'
     | '/api/sign-up-status'
@@ -857,7 +846,6 @@ export interface FileRouteTypes {
     | '/_authenticated/subscribe'
     | '/_authenticated/yc'
     | '/accept-invitation/$id'
-    | '/api/guest-claim'
     | '/api/health'
     | '/api/privacy-region'
     | '/api/sign-up-status'
@@ -924,7 +912,6 @@ export interface RootRouteChildren {
   Char91DotwellKnownChar93HttpMessageSignaturesDirectoryRoute: typeof Char91DotwellKnownChar93HttpMessageSignaturesDirectoryRoute
   Char91DotwellKnownChar93OpenaiAppsChallengeRoute: typeof Char91DotwellKnownChar93OpenaiAppsChallengeRoute
   AcceptInvitationIdRoute: typeof AcceptInvitationIdRoute
-  ApiGuestClaimRoute: typeof ApiGuestClaimRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiPrivacyRegionRoute: typeof ApiPrivacyRegionRoute
   ApiSignUpStatusRoute: typeof ApiSignUpStatusRoute
@@ -1095,13 +1082,6 @@ declare module '@tanstack/react-router' {
       path: '/accept-invitation/$id'
       fullPath: '/accept-invitation/$id'
       preLoaderRoute: typeof AcceptInvitationIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/guest-claim': {
-      id: '/api/guest-claim'
-      path: '/api/guest-claim'
-      fullPath: '/api/guest-claim'
-      preLoaderRoute: typeof ApiGuestClaimRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/health': {
@@ -1671,7 +1651,6 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotwellKnownChar93OpenaiAppsChallengeRoute:
     Char91DotwellKnownChar93OpenaiAppsChallengeRoute,
   AcceptInvitationIdRoute: AcceptInvitationIdRoute,
-  ApiGuestClaimRoute: ApiGuestClaimRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiPrivacyRegionRoute: ApiPrivacyRegionRoute,
   ApiSignUpStatusRoute: ApiSignUpStatusRoute,

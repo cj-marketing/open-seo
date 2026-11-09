@@ -8,14 +8,21 @@ import { AuthRepository } from "@/server/auth/repositories/AuthRepository";
 import { GuestAccountRepository } from "@/server/auth/repositories/GuestAccountRepository";
 import { ActivationRepository } from "@/server/features/activation/repositories/ActivationRepository";
 import { toHex } from "@/server/auth/org-slug";
+import {
+  agentFromRedirectUri,
+  readClaimCookie,
+  readCookie,
+  RETURNING_BROWSER_COOKIE,
+} from "@/server/auth/guest-cookies";
 import { autumn } from "@/server/billing/autumn";
 import { FeatureFlag, isFeatureFlagOn } from "@/server/lib/featureFlags";
 
 // Someone connecting an AI agent over MCP without an OpenSEO session gets a
 // guest account instead of a sign-up form: a user with a placeholder email and
 // its own organization, which starts on the free plan like any new account.
-// The guest later signs up or signs in through its claim link, which hands the
-// organization (projects, remaining credits) to the real account.
+// The connect page leaves a claim cookie in the browser, and the next sign-up
+// or sign-in there hands the guest's organization (projects, remaining
+// credits) and the agent's connection to the real account.
 
 const MAX_GUESTS_PER_IP = 2;
 
@@ -29,11 +36,8 @@ const CLOUD_HOSTING_ASNS = new Set([
   51167, 12876, 45102, 132203,
 ]);
 
-export const GUEST_CLAIM_COOKIE = "openseo_guest_claim";
-const claimTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
-
 type GuestEligibility =
-  | { eligible: true; ipHash: string }
+  | { eligible: true; ipHash: string; slot: number; agent: string | null }
   | { eligible: false; reason: string };
 
 const AI_APP_HOSTS = new Set(["claude.ai", "claude.com", "chatgpt.com"]);
@@ -56,7 +60,8 @@ function sendsCodeToAgent(redirectUri: string) {
 /**
  * Whether this authorize request may get a guest account: hosted only, not
  * while the kill switch is on, only for an AI app's redirect, not from a cloud
- * network, and at most two per IP ever.
+ * network, not from a browser that has signed in before, and at most two per
+ * IP ever.
  */
 export async function checkGuestEligibility(
   request: Request,
@@ -67,6 +72,9 @@ export async function checkGuestEligibility(
   }
   if (!sendsCodeToAgent(redirectUri)) {
     return { eligible: false, reason: "redirect_uri" };
+  }
+  if (readCookie(request.headers, RETURNING_BROWSER_COOKIE)) {
+    return { eligible: false, reason: "returning_browser" };
   }
   if (await isFeatureFlagOn(FeatureFlag.PauseMcpGuestAccounts)) {
     return { eligible: false, reason: "paused" };
@@ -80,12 +88,19 @@ export async function checkGuestEligibility(
     return { eligible: false, reason: "cloud_network" };
   }
   const ipHash = await hashIp(limitKey(ip));
-  if (
-    (await GuestAccountRepository.countForIpHash(ipHash)) >= MAX_GUESTS_PER_IP
-  ) {
+  // Guests are never deleted, so an IP's slots run 0, 1, ... and the next free
+  // one is the count. The unique (ip_hash, slot) index refuses a concurrent
+  // request that read the same count.
+  const slot = await GuestAccountRepository.countForIpHash(ipHash);
+  if (slot >= MAX_GUESTS_PER_IP) {
     return { eligible: false, reason: "ip_limit" };
   }
-  return { eligible: true, ipHash };
+  return {
+    eligible: true,
+    ipHash,
+    slot,
+    agent: agentFromRedirectUri(redirectUri),
+  };
 }
 
 // One home connection on IPv6 gets a whole /64 and can pick any address in
@@ -163,9 +178,14 @@ export async function verifyGuestTurnstile(
 
 // createOrganization is injected (Better Auth's endpoint) so this module
 // needn't import auth.ts, which imports it back for the sign-in claim.
+// Returns null when a concurrent request from the same IP took the slot.
 export async function createGuestAccount(
   request: Request,
-  ipHash: string,
+  {
+    ipHash,
+    slot,
+    agent,
+  }: { ipHash: string; slot: number; agent: string | null },
   createOrganization: (body: {
     name: string;
     slug: string;
@@ -175,14 +195,17 @@ export async function createGuestAccount(
   const userId = crypto.randomUUID().replaceAll("-", "");
   const claimToken = randomToken();
   const userEmail = guestEmail(userId);
-  await GuestAccountRepository.createGuestUser({
+  const created = await GuestAccountRepository.createGuestUser({
     userId,
     email: userEmail,
     ipHash,
+    slot,
+    agent,
     claimToken,
     // The analytics choice that applies to this browser, as at sign-up.
     analyticsOptedOut: !requestPrivacyChoices(request).analytics,
   });
+  if (!created) return null;
   const organization = await createOrganization({
     name: "My organization",
     slug: `org-${toHex(userId)}`,
@@ -200,29 +223,15 @@ function randomToken() {
     .replace(/=+$/, "");
 }
 
-export function parseClaimToken(value: unknown) {
-  const parsed = claimTokenSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-}
-
-function readClaimCookie(headers: Headers | undefined) {
-  const cookie = headers?.get("cookie");
-  if (!cookie) return null;
-  for (const part of cookie.split(";")) {
-    const [name, ...value] = part.trim().split("=");
-    if (name === GUEST_CLAIM_COOKIE) return parseClaimToken(value.join("="));
-  }
-  return null;
-}
-
 /**
- * Hands the guest's organization to `userId`. Returns the organization id, or
- * null when the token names no unclaimed guest (already claimed, or never
- * existed).
+ * Hands the guest's organization, and with it the agent's connection, to
+ * `userId`. Someone with no workspace of their own opens the guest's next; an
+ * existing account stays in its own workspace, which holds its plan.
  */
-export async function claimGuestAccount(claimToken: string, userId: string) {
+async function claimGuestAccount(claimToken: string, userId: string) {
   const guest = await GuestAccountRepository.findUnclaimedGuest(claimToken);
-  if (!guest || guest.userId === userId) return null;
+  if (!guest || guest.userId === userId) return;
+  const hadWorkspace = await GuestAccountRepository.hasMembership(userId);
   await GuestAccountRepository.transferToUser(guest.userId, userId);
   // The guest's agent already set up this organization, and the guest's own
   // onboarding answers went with it. Without this a new account lands in the
@@ -231,9 +240,12 @@ export async function claimGuestAccount(claimToken: string, userId: string) {
     userId,
     guest.organizationId,
   );
-  // Open the guest's organization next, even for someone who already had
-  // their own: it holds the projects, and its link may lead to its Billing.
-  await AuthRepository.setLastActiveOrganization(userId, guest.organizationId);
+  if (!hadWorkspace) {
+    await AuthRepository.setLastActiveOrganization(
+      userId,
+      guest.organizationId,
+    );
+  }
   // The billing customer was created with the guest's placeholder email, so
   // receipts for the credits they buy next would go nowhere.
   const owner = await AuthRepository.getOrganizationOwner(guest.organizationId);
@@ -244,19 +256,18 @@ export async function claimGuestAccount(claimToken: string, userId: string) {
         console.error("guest.claim billing email update failed", error),
       );
   }
-  return guest.organizationId;
 }
 
-/** Runs at every sign-in: a browser that opened a guest's claim link hands
- *  that guest's organization to the account signing in. */
+/** Runs at every sign-in: a browser where an agent connected as a guest hands
+ *  that guest to the account signing in. */
 export async function claimGuestFromCookie(
   headers: Headers | undefined,
   userId: string,
 ) {
   const claimToken = readClaimCookie(headers);
   if (!claimToken) return;
-  // Never let a failed claim block the sign-in itself; the link still works
-  // once they're signed in.
+  // Never let a failed claim block the sign-in itself; the cookie stays, so
+  // the next sign-in tries again.
   await claimGuestAccount(claimToken, userId).catch((error: unknown) =>
     console.error("guest.claim at sign-in failed", error),
   );
